@@ -1,0 +1,6 @@
+.DS_Store
+.env.local
+*.local.json
+/starry-cli
+*.exe
+dist/
