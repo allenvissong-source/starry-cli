@@ -1,4 +1,4 @@
-# 角色卡与世界书文件操作
+# 角色、世界书、Skill 与合集文件操作
 
 CLI 通过获准的 HTTP 接口操作工作区与正式资源。文件转换由同目录的
 `starry-format-host`（Windows 为 `.exe`）执行，不访问 App 数据库。
@@ -7,9 +7,21 @@ CLI 通过获准的 HTTP 接口操作工作区与正式资源。文件转换由�
 
 ## 格式与发行
 
+正式资源获取先运行 `asset acquire-plan`（MCP `assets_plan_acquisition`），核对账号库内的新建、同版复用与另存冲突，再把返回的 `plan_hash` 作为 `planHash` 传给 `asset acquire`。两步保持相同固定 revision、模式、选择和策略；`plan_changed` 要重新审读，结果不明则保留原提交输入查操作，不自动生成新意图。
+
+`selection` 为根成员地址 `type/owner/slug/revision` 数组，省略选择完整图，空数组选择无成员。所选依赖完整保留。`strategy` 为 `reuse`（默认）或 `copy`；复用只针对未改动的同模式同版资源，其他资源保留并另存。返回 `resource_ids` 与 `reused_ids` 供完整回读。普通创建、更新和复制不能提供或改写内部 `catalog_acquisition_*` 授权库存。
+
+已获取 Skill 的新版先用 `asset update-source`（MCP `assets_get_skill_update_source`）传已有 `id`，从受保护谱系取得真实来源、原获取 revision 与最新可读 revision。读取两个固定包完成比较；不要从可编辑来源标签猜地址。读取需 `catalog.skill.read` 与 `assets.skill.read`。
+
+更新选定角色时，计划和提交都传相同的 `skillUpdate: {sourceSkillId, expectedVersion, bindings: [{id, expectedVersion}]}`。版本是 Catalog `entity_version`，绑定默认不选，显式空数组只获取新版。计划 `binding_updates` 可回读作者推荐和保留的稀疏使用者配置；提交原子获取新版并替换选定绑定锚点，旧 Skill 与其他角色保留。回执 `updated_bindings` 含旧/新绑定 ID；完整回读这些资源以及原绑定删除。此操作额外要求 `catalog.character.bindings.write`，计划过期重新审阅，结果不明保留原输入查原操作。
+
 角色支持 JSON、PNG `chara`、CharX 和当前 codec 的 `.starry` 角色包。
 独立世界书只支持 JSON；`.starry` 角色包可携带多本世界书。现有交换格式的
-`package_version=2` 保持不变，接入功能对外统一称 V1。
+新写入 `package_version=3`，仍读真实已分发的版本 2 角色包，接入功能对外统一称 V1。
+Skill 支持标准 Markdown、单 Skill 目录 ZIP、独立 `.starry`；
+合集支持 `.starry`，保留角色、世界书、共享 Skill、关闭的 Skill 绑定、
+成员排序/分组/说明及获取来源。带 `.starry` manifest 的 ZIP 走严格包解析，
+原 Skill ID 与获取来源保持一致。
 角色 JSON、PNG、CharX 中显式附带的世界书即使没有条目，也保留书配置与
 embedded 绑定；空条目不会被当作未附带世界书。
 
@@ -18,7 +30,9 @@ embedded 绑定；空条目不会被当作未附带世界书。
 CLI，等待各平台构建并验证宿主。下载、媒体上传、结构化草稿编辑与读取不依赖
 格式宿主。用户不需 Go、Dart、Flutter SDK 或后端源码。
 
-维护者用已有兄弟 codec 的 package_config 构建原生宿主：
+维护者用已解析的 Starry 主应用 package_config 构建原生宿主，
+以包含当前格式入口所需的 codec、domain 与 compiler 依赖；发行后的 AOT
+宿主独立运行，不需要这些开发依赖：
 
 ```sh
 sh tools/build-format-host.sh /已有目录/starry-format-host
@@ -49,6 +63,8 @@ starry-cli character import --input inspect.json
 ```sh
 starry-cli character import --input import.json
 starry-cli worldbook import --input book-import.json
+starry-cli skill import --input skill-import.json
+starry-cli collection import --input collection-import.json
 ```
 
 整个导入是显式多步保存，不是跨文件的大事务。所有支持的字段与依赖先解析，
@@ -84,6 +100,8 @@ starry-cli worldbook import --input book-import.json
 ```sh
 starry-cli character export --input export.json
 starry-cli worldbook export --input book-export.json
+starry-cli skill export --input skill-export.json
+starry-cli collection export --input collection-export.json
 ```
 
 省略正式 revision 时首请求解析为固定 head，后续正文、条目、书与媒体始终
@@ -93,7 +111,14 @@ starry-cli worldbook export --input book-export.json
 `.starry` 保留两种绑定、多书和四槽媒体。JSON/PNG/CharX 无法容纳整个图时
 拒绝导出，例如多本书、reference 绑定、非头像媒体；独立世界书 JSON
 不能带媒体。缺失/受限依赖、文件、Live2D/其他展示映射、一个槽位多图及
-被关闭的绑定也会阻塞，不能把被过滤的内容默认为空。
+被关闭的世界书或表现关系也会阻塞，不能把被过滤的内容默认为空。
+关闭的 Skill 绑定完整保留，Skill/合集导出使用 `.starry`。
+作者元数据和不能由四槽 API 表达的表现预设（非默认、归档、独立描述/名称）
+明确拒绝，使用产品完整导入器处理。CLI 不声称覆盖整个表现图。
+工作区及正式合集递归获取依赖；不可读成员、文件计数不符、Live2D 成员等
+导致整个导出失败，不静默省略。
+`.starry` 来源提示在资源 ID 重映射后传给根 create 操作，服务端核验真实
+同账号工作资源的谱系；其他账号的提示拒绝，须重新获取公开原件。
 未知第三方角色扩展保存在导入的原始源副本，规范导出不声称逐字保留这些扩展。
 仍可用原始副本恢复外部格式数据。
 

@@ -7,6 +7,10 @@ description: Use Starry CLI to publish posts, read community content, query enga
 
 使用 `starry-cli` 直接调用 Starry 后端。先读 [命令和输入](references/commands.md)。
 CLI 与 MCP 共用 `starry-cli/pkg/community`；不需要启动 MCP。
+
+随 Starry 分发时使用宿主提供的 `STARRY_CLI_BIN`（POSIX shell：`"$STARRY_CLI_BIN"`；
+PowerShell：`& $env:STARRY_CLI_BIN`）替代下文 `starry-cli` 前缀，配置由
+`STARRY_CLI_CONFIG` 指定。独立安装沿用 PATH 入口，无需 Go SDK。
 发行包另含可独立安装的 `starry-character` 和 `starry-worldbook`，共用 CLI 与凭证；
 角色卡/世界书操作及资源通知使用相应 Skill，不通过社区评论或通知接口代替。
 

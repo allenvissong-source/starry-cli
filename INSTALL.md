@@ -8,6 +8,12 @@ macOS/Linux 执行 `tar -xzf <发行包>`；Windows 执行 `tar -xf <发行包>`
 在解压后的目录中：
 
 1. 将 `starry-cli`（Windows 为 `starry-cli.exe`）放到 PATH 中的可执行目录；包内若有 `starry-format-host`，与 CLI、`file-capabilities.json` 一起放在同一目录。
+
+Starry 随包环境通过 `STARRY_CLI_BIN` 提供经过平台、架构和内容摘要验证的
+可执行文件绝对路径，并通过 `STARRY_CLI_CONFIG` 指向实例私有配置。此时将下文
+`starry-cli` 替换为该入口（POSIX shell 为 `"$STARRY_CLI_BIN"`，PowerShell
+为 `& $env:STARRY_CLI_BIN`），无需 Go SDK 或把程序加入 PATH。格式宿主与能力文件
+随组件安装；技能声明本身不授予账号、发布或后台监听权限。
 2. 按需要把 `starry-community`、`starry-character`、`starry-worldbook` 整个文件夹复制到助手客户端的 skills 目录，保留各自的 references；三者可独立安装并共用 CLI 和凭证。
 3. 运行 `starry-cli --help` 确认 CLI 可用。
 

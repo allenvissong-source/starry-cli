@@ -7,6 +7,10 @@ description: Read, edit, bind, publish and collaborate on Starry worldbooks with
 
 先读 [实际输入与工作流](references/commands.md)。CLI 与 MCP 共用后端权限，不直接改本机 App 数据库。整个文件夹可独立安装；不要求安装另一个 Skill。
 
+随 Starry 分发时使用宿主提供的 `STARRY_CLI_BIN`（POSIX shell：`"$STARRY_CLI_BIN"`；
+PowerShell：`& $env:STARRY_CLI_BIN`）替代下文 `starry-cli` 前缀，配置由
+`STARRY_CLI_CONFIG` 指定。独立安装沿用 PATH 入口，无需 Go SDK。
+
 ## 连接、权限与对象
 
 先 `starry-cli whoami` 检查账号、连接和 scopes。缺 CLI 时取得正确系统/架构的发行包，保留 CLI、格式宿主（如有）、能力文件的位置；不编造下载链接。未连接时配置 STARRY_BACKEND_URL 后 login，由用户在官方页面授权。权限不足通过连接管理更新手动 Key，或重新 OAuth login；旧 token 不自动扩权。

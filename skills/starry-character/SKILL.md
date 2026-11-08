@@ -7,6 +7,10 @@ description: Read, create, edit, publish and collaborate on Starry characters wi
 
 先读 [实际命令与协作流程](references/commands.md)。使用现有 `starry-cli`；MCP 宿主使用资料中对应的工具，同源接口具有相同权限。Skill 不运行后台服务，不控制 App 数据库。
 
+随 Starry 分发时使用宿主提供的 `STARRY_CLI_BIN`（POSIX shell：`"$STARRY_CLI_BIN"`；
+PowerShell：`& $env:STARRY_CLI_BIN`）替代下文 `starry-cli` 前缀，配置由
+`STARRY_CLI_CONFIG` 指定。独立安装沿用 PATH 入口，无需 Go SDK。
+
 ## 连接与对象
 
 运行 `starry-cli whoami` 检查当前账号、连接、实时 scopes 和可用 AI。缺 CLI 时取得匹配系统与架构的发行包，不编造公开下载链接。将 CLI、格式宿主（如有）和能力文件放在同一目录；整个 Skill 文件夹可独立安装。
