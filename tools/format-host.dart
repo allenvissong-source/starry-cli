@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:archive/archive.dart';
 import 'package:crypto/crypto.dart';
 import 'package:starry_character_card_codec/starry_character_card_codec.dart';
 import 'package:starry_domain_entities/starry_domain_entities.dart';
@@ -75,6 +76,12 @@ Future<Map<String, dynamic>> inspect(
   final bindings = <Map<String, dynamic>>[];
   final relations = <Map<String, dynamic>>[];
   final warnings = <String>[];
+  final characters = <Map<String, dynamic>>[];
+  final skills = <Map<String, dynamic>>[];
+  final skillBindings = <Map<String, dynamic>>[];
+  final collectionItems = <Map<String, dynamic>>[];
+  final origins = <String, Map<String, Object?>>{};
+  Map<String, dynamic>? collection;
   Map<String, dynamic>? character;
   if (type == 'worldbook') {
     final p = await CardParseService().parseWorldBookFile(input);
@@ -111,19 +118,132 @@ Future<Map<String, dynamic>> inspect(
         p.layeredSpriteMappings.isNotEmpty) {
       throw const FormatException('Unsupported presentation mappings');
     }
+    final archive = ZipDecoder().decodeBytes(await File(input).readAsBytes());
+    final preset = object(
+      jsonDecode(
+        utf8.decode(
+          archive.files
+                  .singleWhere((file) => file.name == kStarryPresetJsonPath)
+                  .content
+              as List<int>,
+        ),
+      ),
+    );
+    requireDefaultPreset(preset, p.character.name);
+    if (p.authorship != null) {
+      throw const FormatException(
+        'Authorship needs the full application importer',
+      );
+    }
     character = p.character.toJson();
     books.addAll(p.worldbooks.map((b) => b.toJson()));
     bindings.addAll(p.worldbookBindings.map((b) => b.toJson()));
     relations.addAll(p.relations.map((r) => r.toJson()));
+    skills.addAll(p.skills.map((s) => s.toJson()));
+    skillBindings.addAll(p.skillBindings.map((b) => b.toJson()));
+    origins.addAll(p.acquisitionOrigins);
     for (final m in p.packagedMedia) {
       await File('$stage/${m.contentHash}').writeAsBytes(m.bytes);
       media.add({'sha256': m.contentHash, 'file': '$stage/${m.contentHash}'});
+    }
+  } else if (type == 'skill') {
+    const codec = StarrySkillPackageCodec();
+    final bytes = await File(input).readAsBytes();
+    final package =
+        !input.toLowerCase().endsWith('.md') &&
+        ZipDecoder()
+            .decodeBytes(bytes)
+            .files
+            .any((file) => file.name == kStarryManifestPath);
+    final skill = package
+        ? codec.decode(bytes)
+        : codec.importFile(bytes, fileName: input, id: 'imported-skill');
+    skills.add(skill.toJson());
+    if (package) {
+      origins.addAll(codec.acquisitionOrigins(bytes));
+    }
+  } else if (type == 'collection') {
+    final package = const StarryCollectionPackageCodec().decode(
+      await File(input).readAsBytes(),
+    );
+    collection = package.collection.toJson();
+    collectionItems.addAll(package.items.map((item) => item.toJson()));
+    origins.addAll(package.acquisitionOrigins);
+    final entries = <Map<String, dynamic>>[];
+    final presets = <String, String>{};
+    for (final resource in package.resources) {
+      final data = resource.data;
+      switch (resource.resourceType) {
+        case 'character':
+          characters.add(
+            {...object(data['payload']), ...data}..remove('payload'),
+          );
+        case 'worldbook':
+          books.add(
+            {
+              ...object(data['payload']),
+              ...data,
+              'entries': <Map<String, dynamic>>[],
+            }..remove('payload'),
+          );
+        case 'worldbook_entry':
+          entries.add(data);
+        case 'character_worldbook_binding':
+          bindings.add(data);
+        case 'skill':
+          skills.add(data);
+        case 'character_skill_binding':
+          skillBindings.add(data);
+        case 'character_preset':
+          requireDefaultPreset(
+            data,
+            package.resources
+                    .singleWhere(
+                      (resource) =>
+                          resource.resourceType == 'character' &&
+                          resource.id == data['character_id'],
+                    )
+                    .data['name']
+                as String,
+          );
+          if (presets.containsValue(data['character_id'])) {
+            throw const FormatException('Multiple presentation presets');
+          }
+          presets[resource.id] = data['character_id'] as String;
+        case 'character_preset_relation':
+          relations.add({...data});
+        default:
+          throw const FormatException('Unsupported collection resource');
+      }
+    }
+    for (final entry in entries) {
+      final book = books.singleWhere((b) => b['id'] == entry['worldbook_id']);
+      (book['entries'] as List).add(entry);
+    }
+    for (final relation in relations) {
+      relation['character_id'] =
+          presets[relation['preset_id']] ??
+          (throw const FormatException('Unresolved presentation preset'));
+    }
+    for (final blob in package.media) {
+      await File('$stage/${blob.contentHash}').writeAsBytes(blob.bytes);
+      media.add({
+        'sha256': blob.contentHash,
+        'mediaType': blob.mediaType,
+        'file': '$stage/${blob.contentHash}',
+      });
     }
   } else {
     throw const FormatException('Unsupported object');
   }
   return {
     'character': character,
+    'characters': characters,
+    'skills': skills,
+    'skill_bindings': skillBindings,
+    'collection': collection,
+    'collection_items': collectionItems,
+    'acquisition_origins': origins,
     'worldbooks': books,
     'bindings': bindings,
     'relations': relations,
@@ -133,6 +253,18 @@ Future<Map<String, dynamic>> inspect(
 }
 
 final timestamp = DateTime.utc(2000);
+void requireDefaultPreset(Map<String, dynamic> preset, String name) {
+  if (preset['is_default'] != true ||
+      preset['is_archived'] == true ||
+      preset['name'] != name ||
+      !const {'default', 'export'}.contains(preset['slug']) ||
+      (preset['description'] as String? ?? '').isNotEmpty) {
+    throw const FormatException(
+      'Presentation metadata needs the full application importer',
+    );
+  }
+}
+
 List<String> strings(dynamic v) => (v as List? ?? []).cast<String>();
 Map<String, dynamic> object(dynamic v) =>
     (v as Map? ?? {}).cast<String, dynamic>();
@@ -282,6 +414,27 @@ Future<void> exportGraph(
   final books = (graph['worldbooks'] as List)
       .map((b) => bookDraft(object(b)))
       .toList();
+  final skills = (graph['skills'] as List? ?? [])
+      .map((s) => SkillAsset.fromJson(object(s)))
+      .toList();
+  final origins = object(
+    graph['acquisition_origins'],
+  ).map((key, value) => MapEntry(key, object(value).cast<String, Object?>()));
+  if (type == 'skill') {
+    if (skills.length != 1 ||
+        !output.endsWith('.starry') ||
+        books.isNotEmpty ||
+        (graph['media'] as List).isNotEmpty) {
+      throw const FormatException('Skill export requires one .starry root');
+    }
+    await File(output).writeAsBytes(
+      const StarrySkillPackageCodec().encode(
+        skills.single,
+        acquisitionOrigins: origins,
+      ),
+    );
+    return;
+  }
   if (type == 'worldbook') {
     if (!output.endsWith('.json') ||
         books.length != 1 ||
@@ -291,8 +444,6 @@ Future<void> exportGraph(
     await File(output).writeAsString(codec.exportWorldBookJson(books.single));
     return;
   }
-  final c = object(graph['character']);
-  final draft = characterDraft(c);
   final bindings = (graph['bindings'] as List).map((b) => object(b)).toList();
   final relations = (graph['relations'] as List).map((r) => object(r)).toList();
   final media = <StarryExportMedia>[];
@@ -309,6 +460,121 @@ Future<void> exportGraph(
       ),
     );
   }
+  if (type == 'collection') {
+    if (!output.endsWith('.starry')) {
+      throw const FormatException('Collection export requires .starry');
+    }
+    Map<String, dynamic> envelope(Map<String, dynamic> fields) => {
+      'id': fields['id'],
+      'owner_user_id': 'local',
+      'name': fields['name'],
+      'visibility_scope': 'private',
+      'created_at': timestamp.toIso8601String(),
+      'updated_at': timestamp.toIso8601String(),
+      'payload': {
+        for (final entry in fields.entries)
+          if (!const {
+            'id',
+            'owner_user_id',
+            'name',
+            'visibility_scope',
+            'created_at',
+            'updated_at',
+            'media',
+            'exportIssues',
+            'entries',
+          }.contains(entry.key))
+            entry.key: entry.value,
+      },
+    };
+    final resources = <StarryCollectionResource>[];
+    void add(String type, Map<String, dynamic> data) => resources.add(
+      StarryCollectionResource(
+        id: data['id'] as String,
+        resourceType: type,
+        data: data,
+      ),
+    );
+    for (final raw in graph['characters'] as List? ?? []) {
+      final character = object(raw);
+      add('character', envelope(character));
+      final id = character['id'] as String;
+      final preset = CharacterPreset(
+        id: '$id-preset',
+        ownerUserId: 'local',
+        characterId: id,
+        name: character['name'] as String,
+        slug: 'export',
+        description: '',
+        isDefault: true,
+        isArchived: false,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      );
+      add('character_preset', preset.toJson());
+      for (var i = 0; i < relations.length; i++) {
+        if (relations[i]['character_id'] != id) continue;
+        add(
+          'character_preset_relation',
+          {
+            ...relations[i],
+            'id': '$id-media-$i',
+            'preset_id': preset.id,
+            'created_at': timestamp.toIso8601String(),
+            'updated_at': timestamp.toIso8601String(),
+          }..remove('character_id'),
+        );
+      }
+    }
+    for (final book in books) {
+      final runtime = runtimeBook(book);
+      add('worldbook', envelope(runtime.toJson()));
+      for (final entry in runtime.entries) {
+        add('worldbook_entry', entry.toJson());
+      }
+    }
+    for (var i = 0; i < bindings.length; i++) {
+      add('character_worldbook_binding', {
+        ...bindings[i],
+        'id': bindings[i]['id'] ?? 'worldbook-binding-$i',
+        'enabled': bindings[i]['enabled'] ?? true,
+        'created_at': timestamp.toIso8601String(),
+        'updated_at': timestamp.toIso8601String(),
+      });
+    }
+    for (final skill in skills) {
+      add('skill', skill.toJson());
+    }
+    for (final raw in graph['skill_bindings'] as List? ?? []) {
+      final binding = CharacterSkillBinding.fromJson(object(raw));
+      add('character_skill_binding', binding.toJson());
+    }
+    await File(output).writeAsBytes(
+      const StarryCollectionPackageCodec().encode(
+        StarryCollectionPackage(
+          collection: AssetCollection.fromJson(object(graph['collection'])),
+          items: (graph['collection_items'] as List)
+              .map((item) => AssetCollectionItem.fromJson(object(item)))
+              .toList(),
+          resources: resources,
+          media: [
+            for (final blob in media)
+              PackagedMedia(
+                contentHash: blob.contentHash,
+                mediaType: blob.mediaType,
+                archivePath: 'asset_blobs/${blob.contentHash}/content',
+                fileName: 'content',
+                bytes: blob.bytes,
+              ),
+          ],
+          acquisitionOrigins: origins,
+        ),
+      ),
+    );
+    return;
+  }
+  final c = object(graph['character']);
+  final draft = characterDraft(c);
   Uint8List bytes;
   if (output.endsWith('.starry')) {
     final character = Character(
@@ -385,13 +651,22 @@ Future<void> exportGraph(
         ],
         worldbooks: books.map(runtimeBook).toList(),
         media: media,
+        skills: skills,
+        skillBindings: [
+          for (final raw in graph['skill_bindings'] as List? ?? [])
+            CharacterSkillBinding.fromJson(object(raw)),
+        ],
+        acquisitionOrigins: origins,
         live2dAliasMappings: [],
         live2dBindings: [],
         layeredSpriteMappings: [],
       ),
     );
   } else {
-    if (books.length > 1 ||
+    if (skills.isNotEmpty ||
+        (graph['skill_bindings'] as List? ?? []).isNotEmpty ||
+        origins.isNotEmpty ||
+        books.length > 1 ||
         bindings.any((b) => b['reference_type'] != 'embedded') ||
         relations.any((r) => r['role'] != 'avatar') ||
         media.length > 1 ||

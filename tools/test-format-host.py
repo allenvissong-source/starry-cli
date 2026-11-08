@@ -136,3 +136,99 @@ with tempfile.TemporaryDirectory(prefix="starry-format-contract-") as temp:
         assert actual["worldbooks"][0]["name"]=="空条目书"
         assert actual["bindings"][0]["reference_type"]=="embedded"
         print(f"PASS {ext}: explicit empty embedded worldbook retained")
+
+    skill_doc = "---\nname: lawine-role\ndescription: Preserve character judgment\n---\n# 演绎\n保持观察与判断。\n"
+    skill = {"id":"skill-1","display_name":"拉薇演绎","summary":"行为逻辑",
+             "scope":"character_bound","tags":["role"],"eager_paths":["references/core.md"],
+             "required_tools":[],"annotations":{},"files":[
+                 {"path":"SKILL.md","content":base64.b64encode(skill_doc.encode()).decode(),"media_type":"text/markdown"},
+                 {"path":"references/core.md","content":base64.b64encode("人物行为🌟".encode()).decode(),"media_type":"text/markdown"},
+                 {"path":"assets/sample.bin","content":base64.b64encode(bytes(range(256))).decode(),"media_type":"application/octet-stream"}]}
+    origin = {"owner_user_id":"account","resource_type":"skill",
+              "resource_id":"12345678-1234-4234-8234-123456789abc"}
+    skill_graph = {"skills":[skill],"worldbooks":[],"media":[],"acquisition_origins":{"skill-1":origin}}
+    dump(graphfile,skill_graph)
+    skill_package = root/"skill.starry"
+    run("export","skill",graphfile,skill_package)
+    stage=root/"skill-stage"
+    stage.mkdir()
+    run("inspect","skill",skill_package,stage)
+    actual=json.loads((stage/"graph.json").read_text())
+    assert actual["skills"]==[skill] and actual["acquisition_origins"]=={"skill-1":origin}
+    renamed = root/"skill.zip"
+    renamed.write_bytes(skill_package.read_bytes())
+    stage=root/"skill-zip-stage"
+    stage.mkdir()
+    run("inspect","skill",renamed,stage)
+    actual=json.loads((stage/"graph.json").read_text())
+    assert actual["skills"]==[skill] and actual["acquisition_origins"]=={"skill-1":origin}
+    source=root/"SKILL.md"
+    source.write_text(skill_doc)
+    stage=root/"markdown-stage"
+    stage.mkdir()
+    run("inspect","skill",source,stage)
+    assert json.loads((stage/"graph.json").read_text())["skills"][0]["display_name"]=="lawine-role"
+    print("PASS Skill: standalone Markdown and .starry, text/binary tree and working origin")
+
+    graph["skills"]=[skill]
+    graph["skill_bindings"]=[{"id":"binding-skill","character_id":"c","skill_id":"skill-1",
+                             "skill_snapshot":{key:value for key,value in skill.items() if key!="id"},
+                             "recommended_config":{},
+                             "enabled":False,"activation":"manual","required":True,"sort_order":7,"purpose":"演绎"}]
+    graph["acquisition_origins"]={"skill-1":origin}
+    dump(graphfile,graph)
+    role_package=root/"role.starry"
+    run("export","character",graphfile,role_package)
+    stage=root/"role-stage"
+    stage.mkdir()
+    run("inspect","character",role_package,stage)
+    actual=json.loads((stage/"graph.json").read_text())
+    assert actual["skills"]==[skill] and actual["skill_bindings"]==graph["skill_bindings"]
+    assert actual["acquisition_origins"]=={"skill-1":origin}
+    run("export","character",graphfile,root/"lossy-role.json",False)
+    assert not (root/"lossy-role.json").exists()
+    print("PASS character Skill: disabled/manual binding preserved and lossy formats rejected")
+
+    graph["characters"]=[card,{**card,"id":"c2","name":"第二角色"}]
+    graph["character"]=None
+    graph["bindings"][0]["character_id"]="c"
+    graph["collection"]={"id":"set","name":"演绎合集","description":"角色与独立 Skill","tags":["角色"]}
+    graph["collection_items"]=[
+        {"id":"item-1","collection_id":"set","target_type":"character","target_id":"c","sort_order":0,"group":"角色","note":"完整绑定"},
+        {"id":"item-2","collection_id":"set","target_type":"character","target_id":"c2","sort_order":1,"group":"角色","note":""},
+        {"id":"item-3","collection_id":"set","target_type":"skill","target_id":"skill-1","sort_order":2,"group":"演绎","note":"共享 Skill"}]
+    dump(graphfile,graph)
+    set_package=root/"collection.starry"
+    run("export","collection",graphfile,set_package)
+    stage=root/"collection-stage"
+    stage.mkdir()
+    run("inspect","collection",set_package,stage)
+    actual=json.loads((stage/"graph.json").read_text())
+    assert len(actual["characters"])==2 and actual["skills"]==[skill]
+    assert actual["collection_items"]==graph["collection_items"]
+    assert actual["skill_bindings"]==graph["skill_bindings"]
+    assert actual["acquisition_origins"]=={"skill-1":origin}
+    print("PASS collection: shared Skill, member ordering/groups/notes and typed role bindings")
+
+    # Valid packages may carry configuration the four-slot machine API cannot
+    # preserve. Reject it before emitting an import plan.
+    def alter_package(source, output, path, edit):
+        with zipfile.ZipFile(source) as archive:
+            files = {name:archive.read(name) for name in archive.namelist()}
+        value=json.loads(files[path])
+        edit(value)
+        files[path]=json.dumps(value).encode()
+        with zipfile.ZipFile(output,"w") as archive:
+            for name,value in files.items():
+                archive.writestr(name,value)
+    with zipfile.ZipFile(role_package) as archive:
+        preset_path=next(name for name in archive.namelist() if name.endswith("/preset.json"))
+    for field,value in (("description","Alternate presentation"),("name","Different preset"),
+                        ("is_archived",True),("is_default",False)):
+        changed=root/f"preset-{field}.starry"
+        alter_package(role_package,changed,preset_path,lambda data: data.update({field:value}))
+        stage=root/("preset-stage-"+field)
+        stage.mkdir()
+        run("inspect","character",changed,stage,False)
+        assert not (stage/"graph.json").exists()
+    print("PASS meaningful preset metadata rejected before import planning")
