@@ -43,6 +43,31 @@ func TestAuthoringSharedRequestPreservesNullAnd201(t *testing.T) {
 	}
 }
 
+func TestUseAccessIsAuthenticatedReadWithoutMutationKey(t *testing.T) {
+	testAccessIsAuthenticatedReadWithoutMutationKey(t, "use")
+}
+
+func TestEditAccessIsAuthenticatedReadWithoutMutationKey(t *testing.T) {
+	testAccessIsAuthenticatedReadWithoutMutationKey(t, "edit")
+}
+
+func testAccessIsAuthenticatedReadWithoutMutationKey(t *testing.T, purpose string) {
+	t.Helper()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" || r.URL.Path != "/api/v1/reading/catalog/skills/12345678-1234-4234-8234-123456789abc/"+purpose+"-access" ||
+			r.Header.Get("Authorization") != "Bearer delegate" || r.Header.Get("Idempotency-Key") != "" {
+			t.Fatalf("wrong use-access request: %s %s", r.Method, r.URL.Path)
+		}
+		w.Write([]byte(`{"success":true,"data":{"allowed":true,"resources":[{"type":"skill","id":"12345678-1234-4234-8234-123456789abc"}]}}`))
+	}))
+	defer server.Close()
+	client, _ := transport.NewClient(transport.Config{BackendURL: server.URL})
+	if _, err := Call(context.Background(), client, "delegate", "catalog_check_"+purpose+"_access",
+		json.RawMessage(`{"type":"skill","id":"12345678-1234-4234-8234-123456789abc"}`)); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestAuthoringUnknownOutcomeIsNotOrdinaryRetry(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(503)
@@ -55,5 +80,35 @@ func TestAuthoringUnknownOutcomeIsNotOrdinaryRetry(t *testing.T) {
 	api, ok := err.(*transport.APIError)
 	if !ok || api.Code != "outcome_unknown" || api.Retryable {
 		t.Fatal(err)
+	}
+}
+
+func TestSkillFilesAndCollectionChangesRetainAtomicInput(t *testing.T) {
+	for _, test := range []struct{ name, action, input string }{
+		{"catalog_update_skill", "skill.update", `{"requestKey":"files-intent","id":"12345678-1234-4234-8234-123456789abc","expectedVersion":3,"expectedReadingVersion":"5","fields":{"files":[{"path":"SKILL.md","media_type":"text/markdown","content":"YWJj"}]}}`},
+		{"catalog_apply_character_skills", "skill_binding.apply", `{"requestKey":"files-intent","parentId":"12345678-1234-4234-8234-123456789abc","expectedReadingVersion":"5","changes":[{"action":"create","id":"12345678-1234-4234-8234-123456789abd","fields":{"skill_id":"12345678-1234-4234-8234-123456789abe","activation":"manual"}}]}`},
+		{"catalog_apply_collection_items", "collection_item.apply", `{"requestKey":"files-intent","parentId":"12345678-1234-4234-8234-123456789abc","expectedReadingVersion":"5","changes":[{"action":"delete","id":"12345678-1234-4234-8234-123456789abd","expectedVersion":2}]}`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/api/v1/authoring/catalog/"+test.action || r.Header.Get("Idempotency-Key") != "files-intent" {
+					t.Error("lost stable action or key")
+				}
+				var actual, wanted map[string]any
+				json.NewDecoder(r.Body).Decode(&actual)
+				json.Unmarshal([]byte(test.input), &wanted)
+				a, _ := json.Marshal(actual)
+				b, _ := json.Marshal(wanted)
+				if string(a) != string(b) {
+					t.Fatalf("input changed: %s", a)
+				}
+				w.Write([]byte(`{"success":true,"data":{"result":{"state":"saved"}}}`))
+			}))
+			defer server.Close()
+			client, _ := transport.NewClient(transport.Config{BackendURL: server.URL})
+			if _, err := Call(context.Background(), client, "delegate", test.name, json.RawMessage(test.input)); err != nil {
+				t.Fatal(err)
+			}
+		})
 	}
 }

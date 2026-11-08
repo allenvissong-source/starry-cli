@@ -167,3 +167,97 @@ func TestImportedGraphRemapsIdentifiersAndPreservesEntryIDsAndAllPositions(t *te
 		t.Fatal("binding not remapped")
 	}
 }
+
+func TestCollectionImportRemapsSharedSkillAndDisabledBindings(t *testing.T) {
+	g := fileGraph{
+		Collection: map[string]any{"id": "set", "name": "Set"},
+		Characters: []map[string]any{{"id": "a", "name": "A"}, {"id": "b", "name": "B"}},
+		Skills:     []map[string]any{{"id": "s", "display_name": "Role", "files": []any{}}},
+		SkillBindings: []map[string]any{
+			{"character_id": "a", "skill_id": "s", "enabled": false, "activation": "manual", "required": true},
+			{"character_id": "b", "skill_id": "s", "enabled": true, "activation": "always"},
+		},
+		CollectionItems: []map[string]any{
+			{"target_type": "character", "target_id": "a", "sort_order": 1, "group": "Roles", "note": "First"},
+			{"target_type": "character", "target_id": "b", "sort_order": 2},
+		},
+		AcquisitionOrigins: map[string]map[string]any{"s": {
+			"owner_user_id": "owner", "resource_type": "skill", "resource_id": "12345678-1234-4234-8234-123456789abc",
+		}},
+	}
+	steps, err := normalizeGraph(&g, "collection", "seed")
+	if err != nil {
+		t.Fatal(err)
+	}
+	creates, bindings, items := 0, 0, 0
+	for _, step := range steps {
+		switch step.Name {
+		case "catalog_create_skill":
+			creates++
+			if step.Input.AcquisitionOrigin["resource_type"] != "skill" {
+				t.Fatal("lost origin")
+			}
+		case "catalog_create_skill_binding":
+			bindings++
+			if step.Input.Fields["skill_id"] != g.Skills[0]["id"] {
+				t.Fatal("shared target not remapped")
+			}
+			if step.Input.ParentID == g.Characters[0]["id"] && (step.Input.Fields["enabled"] != false || step.Input.Fields["activation"] != "manual" || step.Input.Fields["required"] != true) {
+				t.Fatal("disabled binding changed", step)
+			}
+		case "catalog_apply_collection_items":
+			items++
+			if step.Input.ParentID != g.Collection["id"] || len(step.Input.Changes) != 1 {
+				t.Fatal("member parent lost", step)
+			}
+		}
+	}
+	if creates != 1 || bindings != 2 || items != 2 {
+		t.Fatal(creates, bindings, items)
+	}
+}
+
+func TestStandaloneImportRejectsUnrelatedRootsBeforeWrites(t *testing.T) {
+	for _, kind := range []string{"character", "worldbook", "skill"} {
+		g := fileGraph{
+			Character:  map[string]any{"id": "c", "name": "C"},
+			Worldbooks: []map[string]any{{"id": "w", "name": "W"}},
+			Skills:     []map[string]any{{"id": "s", "display_name": "S"}},
+			Collection: map[string]any{"id": "set", "name": "Set"},
+		}
+		if _, err := normalizeGraph(&g, kind, "intent"); err == nil {
+			t.Fatal("unrelated graph accepted", kind)
+		}
+	}
+	if _, err := normalizeGraph(&fileGraph{}, "character", "intent"); err == nil {
+		t.Fatal("missing character accepted")
+	}
+}
+
+func TestCollectionMediaUsesDistinctIntentPerCharacter(t *testing.T) {
+	hash := strings.Repeat("a", 64)
+	g := fileGraph{
+		Collection: map[string]any{"id": "set", "name": "Set"},
+		Characters: []map[string]any{{"id": "a", "name": "A"}, {"id": "b", "name": "B"}},
+		CollectionItems: []map[string]any{
+			{"target_type": "character", "target_id": "a"},
+			{"target_type": "character", "target_id": "b"},
+		},
+		Media: []map[string]any{{"sha256": hash}},
+		Relations: []map[string]any{
+			{"character_id": "a", "target_type": "asset", "target_id": hash, "role": "avatar"},
+			{"character_id": "b", "target_type": "asset", "target_id": hash, "role": "avatar"},
+		},
+	}
+	steps, err := normalizeGraph(&g, "collection", "intent")
+	if err != nil {
+		t.Fatal(err)
+	}
+	keys := map[string]bool{}
+	for _, step := range steps {
+		if keys[step.Input.RequestKey] {
+			t.Fatal("two graph writes share an intent", step.Name)
+		}
+		keys[step.Input.RequestKey] = true
+	}
+}

@@ -31,6 +31,21 @@ var AgentScopes = []string{
 	"assets.character.suggestion.manage", "assets.worldbook.suggestion.manage",
 	"assets.character.comment.create", "assets.worldbook.comment.create",
 	"assets.character.notifications.read", "assets.worldbook.notifications.read",
+	"assets.skill.read", "assets.skill.package.read", "catalog.skill.read", "catalog.skill.write", "catalog.skill.delete",
+	"assets.skill.publish", "assets.skill.policy.manage", "assets.skill.fork", "assets.skill.suggestion.create", "assets.skill.suggestion.manage",
+	"assets.skill.comment.create", "assets.skill.notifications.read",
+	"assets.collection.read", "assets.collection.package.read", "catalog.collection.read", "catalog.collection.write", "catalog.collection.delete",
+	"assets.collection.publish", "assets.collection.policy.manage", "assets.collection.fork", "assets.collection.suggestion.create", "assets.collection.suggestion.manage",
+	"assets.collection.comment.create", "assets.collection.notifications.read",
+}
+
+func HasResourceScope(scopes []string, suffix string) bool {
+	for _, kind := range []string{"character", "worldbook", "skill", "collection"} {
+		if slices.Contains(scopes, "assets."+kind+"."+suffix) {
+			return true
+		}
+	}
+	return false
 }
 
 type OAuthMetadata struct {

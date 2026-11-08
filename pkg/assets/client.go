@@ -14,7 +14,7 @@ import (
 )
 
 type SearchInput struct {
-	Type    string   `json:"type,omitempty" jsonschema:"character, worldbook or all; all returns only granted types"`
+	Type    string   `json:"type,omitempty" jsonschema:"character, worldbook, skill, collection or all; all returns only granted types"`
 	Keyword string   `json:"keyword,omitempty" jsonschema:"Optional metadata keyword, up to 128 Unicode scalars"`
 	Tags    []string `json:"tags,omitempty" jsonschema:"All required tags, at most ten"`
 	Author  string   `json:"author,omitempty" jsonschema:"Exact owner user ID"`
@@ -23,7 +23,7 @@ type SearchInput struct {
 }
 
 type ResourceInput struct {
-	Type     string `json:"type" jsonschema:"character or worldbook"`
+	Type     string `json:"type" jsonschema:"character, worldbook, skill or collection"`
 	Owner    string `json:"owner" jsonschema:"Owner user ID, not a resource UUID"`
 	Slug     string `json:"slug" jsonschema:"Resource slug"`
 	Revision string `json:"revision,omitempty" jsonschema:"Canonical lowercase revision UUID; omit for current head"`
@@ -59,7 +59,7 @@ var userID = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$`)
 var slugID = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,127}$`)
 
 func resourcePath(in ResourceInput) (string, error) {
-	if !slices.Contains([]string{"character", "worldbook"}, in.Type) || !userID.MatchString(in.Owner) || !slugID.MatchString(in.Slug) || (in.Revision != "" && !UUID.MatchString(in.Revision)) {
+	if !IsResourceType(in.Type) || !userID.MatchString(in.Owner) || !slugID.MatchString(in.Slug) || (in.Revision != "" && !UUID.MatchString(in.Revision)) {
 		return "", errors.New("invalid resource address")
 	}
 	return "/api/v1/reading/assets/" + in.Type + "/" + url.PathEscape(in.Owner) + "/" + url.PathEscape(in.Slug), nil
@@ -73,7 +73,7 @@ func SearchPath(in SearchInput) (string, error) {
 	if in.Type == "" {
 		in.Type = "all"
 	}
-	if !slices.Contains([]string{"all", "character", "worldbook"}, in.Type) || !transport.ValidText(in.Keyword, 128) || len(in.Tags) > 10 || (in.Author != "" && !userID.MatchString(in.Author)) {
+	if in.Type != "all" && !IsResourceType(in.Type) || !transport.ValidText(in.Keyword, 128) || len(in.Tags) > 10 || (in.Author != "" && !userID.MatchString(in.Author)) {
 		return "", errors.New("invalid search arguments")
 	}
 	for _, tag := range in.Tags {
@@ -90,6 +90,10 @@ func SearchPath(in SearchInput) (string, error) {
 		q.Set("author", in.Author)
 	}
 	return "/api/v1/reading/assets?" + q.Encode(), nil
+}
+
+func IsResourceType(kind string) bool {
+	return kind == "character" || kind == "worldbook" || kind == "skill" || kind == "collection"
 }
 
 func PackagePath(in PackageInput) (string, error) {

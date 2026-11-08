@@ -12,7 +12,7 @@ import (
 )
 
 type PublicationInput struct {
-	Type                string `json:"type" jsonschema:"character or worldbook"`
+	Type                string `json:"type" jsonschema:"character, worldbook, skill or collection"`
 	RequestKey          string `json:"requestKey" jsonschema:"Stable intent key; preserve after outcome_unknown"`
 	DraftID             string `json:"draftId" jsonschema:"Owned workspace UUID"`
 	Slug                string `json:"slug" jsonschema:"Target publish slug"`
@@ -30,7 +30,7 @@ type PolicyPatch struct {
 	Confirmations       []string `json:"confirmations,omitempty" jsonschema:"Explicit acknowledgements required by current policy change; never add automatically"`
 }
 type PolicyInput struct {
-	Type       string      `json:"type" jsonschema:"character or worldbook"`
+	Type       string      `json:"type" jsonschema:"character, worldbook, skill or collection"`
 	RequestKey string      `json:"requestKey" jsonschema:"Stable operation intent key"`
 	Slug       string      `json:"slug" jsonschema:"Owned formal asset slug"`
 	IfMatch    string      `json:"ifMatch" jsonschema:"Required current policy_N version"`
@@ -79,7 +79,7 @@ func Publication(ctx context.Context, client *transport.Client, token, name stri
 		raw, _ := json.Marshal(in)
 		json.Unmarshal(raw, &body)
 	}
-	if kind != "character" && kind != "worldbook" {
+	if !IsResourceType(kind) {
 		return nil, errors.New("invalid resource type")
 	}
 	delete(body, "type")

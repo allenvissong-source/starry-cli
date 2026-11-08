@@ -28,6 +28,7 @@ type WriteInput struct {
 	Changes                []Change       `json:"changes,omitempty" jsonschema:"1-50 entry changes for apply; atomic, each existing entry needs expectedVersion"`
 	MediaRole              string         `json:"mediaRole,omitempty" jsonschema:"Media only: avatar, cover, illustration, background"`
 	MediaAssetID           *string        `json:"mediaAssetId,omitempty" jsonschema:"Media only: owned registered image UUID; null clears the selected slot"`
+	AcquisitionOrigin      map[string]any `json:"acquisitionOrigin,omitempty" jsonschema:"Root creation only: package working-copy source with owner_user_id, resource_type and resource_id. The backend requires an existing source of the same owner and type and inherits its trusted lineage."`
 }
 
 var WriteActions = map[string]string{
@@ -37,6 +38,11 @@ var WriteActions = map[string]string{
 	"catalog_apply_worldbook_entry_changes": "entry.apply",
 	"catalog_bind_worldbook":                "binding.create", "catalog_unbind_worldbook": "binding.delete",
 	"catalog_set_character_media": "character.media", "catalog_set_worldbook_media": "worldbook.media",
+	"catalog_create_skill": "skill.create", "catalog_update_skill": "skill.update", "catalog_delete_skill": "skill.delete",
+	"catalog_create_skill_binding": "skill_binding.create", "catalog_update_skill_binding": "skill_binding.update",
+	"catalog_delete_skill_binding": "skill_binding.delete", "catalog_apply_character_skills": "skill_binding.apply",
+	"catalog_create_collection": "collection.create", "catalog_update_collection": "collection.update", "catalog_delete_collection": "collection.delete",
+	"catalog_apply_collection_items": "collection_item.apply",
 }
 var intentKey = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$`)
 

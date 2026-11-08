@@ -35,13 +35,18 @@ const help = `Starry CLI — 直接连接后端，无需 MCP 服务
       asset search|get|package|revisions|diff
       character list|get|create|update|delete|bindings|bind|unbind|media set
       worldbook list|get|create|update|delete|entries list|get|create|update|delete|apply|media set
+      skill list|get|create|update|delete
+      resource use-access — 每次使用前核验来源与依赖权限
+      resource edit-access — 保存或另存前核验当前编辑许可
+      character skills list|bind|update|unbind|apply
+      collection list|get|create|update|delete; collection items list|apply
       asset operation
       asset preview|publish|policy
-      asset fork|stats|notifications|inbox
+      asset acquire-plan|acquire|fork|stats|notifications|inbox
       asset suggestions list|get|create|withdraw|reject|adopt
       asset comments list|create
       media upload|download|operation
-      character import|export; worldbook import|export
+      character import|export; worldbook import|export; skill import|export; collection import|export
       watch [--domain community|assets] [--cursor-file FILE] [--once] [--timeout DURATION] [--dispatch]
       watch-state --state-file FILE [--input FILE|-]
 配置: STARRY_BACKEND_URL, STARRY_API_KEY, STARRY_PUBLIC_WEB_URL
@@ -132,7 +137,7 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	}
 	command := args[0]
 	resourceName := ""
-	if command == "asset" || command == "character" || command == "worldbook" || command == "media" {
+	if command == "asset" || command == "character" || command == "worldbook" || command == "skill" || command == "collection" || command == "media" || command == "resource" {
 		parts := []string{command}
 		index := 1
 		for index < len(args) && !strings.HasPrefix(args[index], "-") {
@@ -143,8 +148,18 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 			"asset search": "assets_search", "asset get": "assets_get_revision",
 			"asset package": "assets_get_package", "asset revisions": "assets_list_revisions", "asset diff": "assets_diff",
 			"character list": "catalog_list_characters", "character get": "catalog_get_character",
-			"character bindings": "catalog_list_character_bindings",
-			"worldbook list":     "catalog_list_worldbooks", "worldbook get": "catalog_get_worldbook",
+			"character bindings":    "catalog_list_character_bindings",
+			"character skills list": "catalog_list_character_skills",
+			"character skills bind": "catalog_create_skill_binding", "character skills update": "catalog_update_skill_binding",
+			"character skills unbind": "catalog_delete_skill_binding", "character skills apply": "catalog_apply_character_skills",
+			"skill list": "catalog_list_skills", "skill get": "catalog_get_skill",
+			"resource use-access":  "catalog_check_use_access",
+			"resource edit-access": "catalog_check_edit_access",
+			"skill create":         "catalog_create_skill", "skill update": "catalog_update_skill", "skill delete": "catalog_delete_skill",
+			"collection list": "catalog_list_collections", "collection get": "catalog_get_collection",
+			"collection create": "catalog_create_collection", "collection update": "catalog_update_collection", "collection delete": "catalog_delete_collection",
+			"collection items list": "catalog_list_collection_items", "collection items apply": "catalog_apply_collection_items",
+			"worldbook list": "catalog_list_worldbooks", "worldbook get": "catalog_get_worldbook",
 			"worldbook entries list": "catalog_list_worldbook_entries", "worldbook entries get": "catalog_get_worldbook_entry",
 			"character create": "catalog_create_character", "character update": "catalog_update_character", "character delete": "catalog_delete_character",
 			"worldbook create": "catalog_create_worldbook", "worldbook update": "catalog_update_worldbook", "worldbook delete": "catalog_delete_worldbook",
@@ -160,10 +175,15 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 			"asset suggestions reject": "assets_reject_suggestion", "asset suggestions adopt": "assets_adopt_suggestion",
 			"asset comments list": "assets_list_comments", "asset comments create": "assets_create_comment",
 			"asset preview": "assets_preview_publish", "asset publish": "assets_publish", "asset policy": "assets_update_policy",
-			"media upload": "local_media_upload", "media download": "local_media_download",
+			"asset acquire":       "assets_acquire",
+			"asset acquire-plan":  "assets_plan_acquisition",
+			"asset update-source": "assets_get_skill_update_source",
+			"media upload":        "local_media_upload", "media download": "local_media_download",
 			"media operation":  "assets_get_upload",
 			"character import": "local_character_import", "character export": "local_character_export",
 			"worldbook import": "local_worldbook_import", "worldbook export": "local_worldbook_export",
+			"skill import": "local_skill_import", "skill export": "local_skill_export",
+			"collection import": "local_collection_import", "collection export": "local_collection_export",
 		}[strings.Join(parts, " ")]
 		if resourceName == "" {
 			return report(stderr, errors.New("unknown resource action; use --help"))
@@ -330,13 +350,11 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	}
 	var out map[string]any
 	switch name {
-	case "local_character_import", "local_worldbook_import", "local_character_export", "local_worldbook_export":
+	case "local_character_import", "local_worldbook_import", "local_skill_import", "local_collection_import",
+		"local_character_export", "local_worldbook_export", "local_skill_export", "local_collection_export":
 		var input fileInput
 		if err = community.DecodeInput(raw, &input); err == nil {
-			kind := "character"
-			if strings.HasPrefix(name, "local_worldbook") {
-				kind = "worldbook"
-			}
+			kind := strings.Split(name, "_")[1]
 			if strings.HasSuffix(name, "_import") {
 				binding := client.BackendURL() + "\x00" + auth.Principal.OwnerUserID + "\x00" + auth.Principal.IntegrationID
 				out, err = importFile(requestCtx, client.Client, auth.Token, binding, kind, input)

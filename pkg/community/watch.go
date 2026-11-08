@@ -29,7 +29,7 @@ func WatchDomain(ctx context.Context, domain, cursor string, interval time.Durat
 	if domain == "assets" {
 		path, uri, refresh = "/api/v1/reading/assets/inbox", AssetsInboxURI, "assets_list_notifications"
 		authorized = func(scopes []string) bool {
-			return slices.Contains(scopes, "assets.character.notifications.read") || slices.Contains(scopes, "assets.worldbook.notifications.read")
+			return HasResourceScope(scopes, "notifications.read")
 		}
 	} else if domain != "community" {
 		return newAPIError(400, "invalid_argument")

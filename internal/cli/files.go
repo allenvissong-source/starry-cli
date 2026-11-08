@@ -41,12 +41,18 @@ type fileInput struct {
 }
 
 type fileGraph struct {
-	Character  map[string]any   `json:"character"`
-	Worldbooks []map[string]any `json:"worldbooks"`
-	Bindings   []map[string]any `json:"bindings"`
-	Relations  []map[string]any `json:"relations"`
-	Media      []map[string]any `json:"media"`
-	Warnings   []string         `json:"warnings"`
+	Character          map[string]any            `json:"character"`
+	Characters         []map[string]any          `json:"characters,omitempty"`
+	Skills             []map[string]any          `json:"skills,omitempty"`
+	SkillBindings      []map[string]any          `json:"skill_bindings,omitempty"`
+	Collection         map[string]any            `json:"collection,omitempty"`
+	CollectionItems    []map[string]any          `json:"collection_items,omitempty"`
+	AcquisitionOrigins map[string]map[string]any `json:"acquisition_origins,omitempty"`
+	Worldbooks         []map[string]any          `json:"worldbooks"`
+	Bindings           []map[string]any          `json:"bindings"`
+	Relations          []map[string]any          `json:"relations"`
+	Media              []map[string]any          `json:"media"`
+	Warnings           []string                  `json:"warnings"`
 }
 
 type importStep struct {
@@ -98,14 +104,17 @@ func formatHost(ctx context.Context, action, kind, input, output string) error {
 
 func validateSource(path, kind string) ([]byte, error) {
 	ext := strings.ToLower(filepath.Ext(path))
-	if kind == "worldbook" && ext != ".json" || kind == "character" && !slices.Contains([]string{".json", ".png", ".charx", ".starry"}, ext) {
-		return nil, errors.New("unsupported format; standalone worldbooks support JSON")
+	if !assets.IsResourceType(kind) || kind == "worldbook" && ext != ".json" ||
+		kind == "character" && !slices.Contains([]string{".json", ".png", ".charx", ".starry"}, ext) ||
+		kind == "skill" && !slices.Contains([]string{".md", ".zip", ".starry"}, ext) ||
+		kind == "collection" && ext != ".starry" {
+		return nil, errors.New("unsupported format for the selected resource type")
 	}
 	raw, err := readFile(path, 128<<20, false)
 	if err != nil || len(raw) == 0 {
 		return nil, errors.New("source must be a bounded regular file")
 	}
-	if ext == ".charx" || ext == ".starry" {
+	if ext == ".charx" || ext == ".starry" || ext == ".zip" {
 		z, err := zip.NewReader(bytes.NewReader(raw), int64(len(raw)))
 		if err != nil {
 			return nil, errors.New("invalid archive")
@@ -218,6 +227,8 @@ func saveProgress(path string, value any) error {
 }
 
 var characterFileFields = strings.Fields("name nickname description personality scenario first_message example_messages system_prompt post_history_instructions creator_notes character_version alternate_greetings tags depth_prompt talkativeness")
+var skillFileFields = strings.Fields("display_name summary scope tags eager_paths required_tools files annotations")
+var skillBindingFileFields = strings.Fields("skill_id skill_snapshot recommended_config enabled activation required sort_order purpose")
 var bookFileFields = strings.Fields("name description creator_notes recursive_scanning allow_entry_cascade scan_depth token_budget max_recursion_depth tags extensions")
 var entryFileFields = strings.Fields("entry_uid comment content position group_name automation_id outlet_name vectorized_value enabled use_probability case_sensitive match_whole_words constant selective use_group use_group_scoring prevent_recursion exclude_recursion delay_until_recursion add_memo is_favorite role entry_order depth sticky cooldown delay selective_logic group_weight group_override entry_scan_depth insertion_order display_index probability keys secondary_keys extensions character_filter")
 
@@ -259,6 +270,13 @@ func publishedMediaSlot(file map[string]any) (string, error) {
 }
 
 func normalizeGraph(g *fileGraph, kind, seed string) ([]importStep, error) {
+	if !slices.Contains([]string{"character", "worldbook", "skill", "collection"}, kind) ||
+		kind == "character" && (g.Character == nil || len(g.Characters) != 0 || g.Collection != nil || len(g.CollectionItems) != 0) ||
+		kind == "worldbook" && (len(g.Worldbooks) != 1 || g.Character != nil || len(g.Characters)+len(g.Skills)+len(g.Bindings)+len(g.SkillBindings)+len(g.Relations)+len(g.CollectionItems) != 0 || g.Collection != nil) ||
+		kind == "skill" && (len(g.Skills) != 1 || g.Character != nil || len(g.Characters)+len(g.Worldbooks)+len(g.Bindings)+len(g.SkillBindings)+len(g.Relations)+len(g.Media)+len(g.CollectionItems) != 0 || g.Collection != nil) ||
+		kind == "collection" && (g.Collection == nil || g.Character != nil) {
+		return nil, errors.New("graph does not match the selected root type")
+	}
 	for _, warning := range g.Warnings {
 		if strings.Contains(strings.ToLower(warning), "duplicate") || strings.Contains(strings.ToLower(warning), "lost") {
 			return nil, errors.New("source has lossy parsing warnings; repair source before importing")
@@ -270,12 +288,34 @@ func normalizeGraph(g *fileGraph, kind, seed string) ([]importStep, error) {
 			Input: catalog.WriteInput{RequestKey: stableID(seed + fmt.Sprint(len(steps))),
 				ID: id, ParentID: parent, Fields: fields}})
 	}
+	origins := map[string]map[string]any{}
+	characters := g.Characters
 	if kind == "character" {
-		if strings.TrimSpace(text(g.Character["name"])) == "" {
-			return nil, errors.New("character name is required")
+		characters = []map[string]any{g.Character}
+	}
+	characterIDs := map[string]string{}
+	for i, character := range characters {
+		old := text(character["id"])
+		if old == "" || characterIDs[old] != "" || strings.TrimSpace(text(character["name"])) == "" {
+			return nil, errors.New("invalid or duplicate character")
 		}
-		g.Character["id"] = stableID(seed + "character")
-		add("catalog_create_character", text(g.Character["id"]), "", selectFields(g.Character, characterFileFields))
+		id := stableID(seed + fmt.Sprintf("character:%d", i))
+		characterIDs[old], character["id"] = id, id
+		origins[id] = g.AcquisitionOrigins[old]
+		add("catalog_create_character", id, "", selectFields(character, characterFileFields))
+	}
+	skillIDs := map[string]string{}
+	for i, skill := range g.Skills {
+		old := text(skill["id"])
+		if old == "" || skillIDs[old] != "" || strings.TrimSpace(text(skill["display_name"])) == "" {
+			return nil, errors.New("invalid or duplicate Skill")
+		}
+		id := stableID(seed + fmt.Sprintf("skill:%d", i))
+		skillIDs[old], skill["id"] = id, id
+		origins[id] = g.AcquisitionOrigins[old]
+		annotations := asObject(skill["annotations"])
+		delete(annotations, "selection_id")
+		add("catalog_create_skill", id, "", selectFields(skill, skillFileFields))
 	}
 	bookIDs := map[string]string{}
 	bookMedia := []importStep{}
@@ -286,6 +326,7 @@ func normalizeGraph(g *fileGraph, kind, seed string) ([]importStep, error) {
 		}
 		book["id"] = stableID(seed + fmt.Sprintf("book:%d", i))
 		bookIDs[old] = text(book["id"])
+		origins[text(book["id"])] = g.AcquisitionOrigins[old]
 		ext := asObject(book["extensions"])
 		for role, rawHash := range asObject(ext["starry_media"]) {
 			hash := text(rawHash)
@@ -359,14 +400,66 @@ func normalizeGraph(g *fileGraph, kind, seed string) ([]importStep, error) {
 	seenBooks := map[string]bool{}
 	for i, b := range g.Bindings {
 		book := bookIDs[text(b["worldbook_id"])]
-		if book == "" || seenBooks[book] || b["enabled"] == false ||
+		character := characterIDs[text(b["character_id"])]
+		if kind == "character" && character == "" {
+			character = text(g.Character["id"])
+		}
+		key := character + "/" + book
+		if book == "" || character == "" || seenBooks[key] || b["enabled"] == false ||
 			!slices.Contains([]string{"embedded", "reference"}, text(b["reference_type"])) {
 			return nil, errors.New("unresolved, disabled or duplicate binding")
 		}
-		seenBooks[book] = true
+		seenBooks[key] = true
 		b["worldbook_id"] = book
-		add("catalog_bind_worldbook", stableID(seed+fmt.Sprintf("binding:%d", i)), text(g.Character["id"]),
+		b["character_id"] = character
+		add("catalog_bind_worldbook", stableID(seed+fmt.Sprintf("binding:%d", i)), character,
 			map[string]any{"worldbook_id": book, "reference_type": b["reference_type"], "sort_order": i})
+	}
+	seenSkills := map[string]bool{}
+	for i, binding := range g.SkillBindings {
+		character, skill := characterIDs[text(binding["character_id"])], skillIDs[text(binding["skill_id"])]
+		key := character + "/" + skill
+		if character == "" || skill == "" || seenSkills[key] {
+			return nil, errors.New("unresolved or duplicate Skill binding")
+		}
+		seenSkills[key] = true
+		binding["character_id"], binding["skill_id"] = character, skill
+		add("catalog_create_skill_binding", stableID(seed+fmt.Sprintf("skill-binding:%d", i)), character,
+			selectFields(binding, skillBindingFileFields))
+	}
+	if kind == "skill" && len(g.Skills) != 1 || kind == "worldbook" && len(g.Worldbooks) != 1 {
+		return nil, errors.New("standalone import must contain one root")
+	}
+	if kind == "collection" {
+		old := text(g.Collection["id"])
+		if old == "" || strings.TrimSpace(text(g.Collection["name"])) == "" || len(g.CollectionItems) > 128 {
+			return nil, errors.New("invalid collection root")
+		}
+		id := stableID(seed + "collection")
+		g.Collection["id"] = id
+		origins[id] = g.AcquisitionOrigins[old]
+		add("catalog_create_collection", id, "", selectFields(g.Collection, strings.Fields("name description tags")))
+		targets := map[string]bool{}
+		for i, item := range g.CollectionItems {
+			var target string
+			switch text(item["target_type"]) {
+			case "character":
+				target = characterIDs[text(item["target_id"])]
+			case "worldbook":
+				target = bookIDs[text(item["target_id"])]
+			case "skill":
+				target = skillIDs[text(item["target_id"])]
+			}
+			if target == "" || targets[target] || item["source_repository_id"] != nil || item["source_revision_id"] != nil {
+				return nil, errors.New("unresolved, external or duplicate collection member")
+			}
+			targets[target] = true
+			item["target_id"], item["collection_id"] = target, id
+			fields := selectFields(item, strings.Fields("target_type target_id sort_order group note"))
+			steps = append(steps, importStep{Name: "catalog_apply_collection_items", Status: "prepared",
+				Input: catalog.WriteInput{RequestKey: stableID(seed + fmt.Sprintf("collection-item:%d", i)), ParentID: id,
+					Changes: []catalog.Change{{Action: "create", ID: stableID(seed + fmt.Sprintf("item:%d", i)), Fields: fields}}}})
+		}
 	}
 	media := map[string]bool{}
 	for _, m := range g.Media {
@@ -379,16 +472,23 @@ func normalizeGraph(g *fileGraph, kind, seed string) ([]importStep, error) {
 	roles := map[string]bool{}
 	for _, r := range g.Relations {
 		role, hash := text(r["role"]), text(r["target_id"])
+		character := characterIDs[text(r["character_id"])]
+		if kind == "character" && character == "" {
+			character = text(g.Character["id"])
+		}
+		key := character + "/" + role
 		if text(r["target_type"]) != "asset" || !slices.Contains([]string{"avatar", "cover", "illustration", "background"}, role) ||
-			!media[hash] || roles[role] || r["enabled"] == false || r["export_included"] == false ||
+			character == "" || !media[hash] || roles[key] || r["enabled"] == false || r["export_included"] == false ||
+			r["is_primary"] == false ||
 			len(asObject(r["settings"])) > 0 || len(asObject(r["annotations"])) > 0 ||
 			(text(r["profile"]) != "" && text(r["profile"]) != "default") {
 			return nil, errors.New("presentation graph cannot be represented by four media slots")
 		}
-		roles[role] = true
+		roles[key] = true
+		r["character_id"] = character
 		steps = append(steps, importStep{Name: "catalog_set_character_media", Status: "prepared",
-			Input: catalog.WriteInput{RequestKey: stableID(seed + "media:" + role),
-				ID: text(g.Character["id"]), MediaRole: role, Fields: map[string]any{"sourceHash": hash}}})
+			Input: catalog.WriteInput{RequestKey: stableID(seed + "media:" + character + ":" + role),
+				ID: character, MediaRole: role, Fields: map[string]any{"sourceHash": hash}}})
 	}
 	for _, step := range bookMedia {
 		if !slices.Contains([]string{"avatar", "cover", "illustration", "background"}, step.Input.MediaRole) ||
@@ -398,10 +498,25 @@ func normalizeGraph(g *fileGraph, kind, seed string) ([]importStep, error) {
 		steps = append(steps, step)
 	}
 	// Reject oversized/invalid fields before the first HTTP write.
-	for _, step := range steps {
+	for i := range steps {
+		step := &steps[i]
+		if slices.Contains([]string{"catalog_create_character", "catalog_create_worldbook", "catalog_create_skill", "catalog_create_collection"}, step.Name) {
+			step.Input.AcquisitionOrigin = origins[step.Input.ID]
+		}
 		raw, _ := json.Marshal(step.Input)
-		if len(raw) > 64<<10 {
-			return nil, errors.New("single authoring intent exceeds 64 KiB")
+		limit := 64 << 10
+		if step.Name == "catalog_create_skill" {
+			limit = 4 << 20
+		}
+		if len(raw) > limit {
+			return nil, errors.New("single authoring intent exceeds Catalog limit")
+		}
+		if step.Input.AcquisitionOrigin != nil {
+			origin := step.Input.AcquisitionOrigin
+			if len(origin) != 3 || !assets.UUID.MatchString(text(origin["resource_id"])) ||
+				!assets.IsResourceType(text(origin["resource_type"])) || text(origin["owner_user_id"]) == "" {
+				return nil, errors.New("invalid acquisition source")
+			}
 		}
 		for key, v := range step.Input.Fields {
 			if s, ok := v.(string); ok && len(s) > 48000 || key == "name" && len(text(v)) > 255 {
@@ -466,6 +581,12 @@ func importFile(ctx context.Context, client *transport.Client, token, binding, k
 		if err != nil {
 			return nil, err
 		}
+		parts := strings.Split(binding, "\x00")
+		for _, step := range progress.Steps {
+			if origin := step.Input.AcquisitionOrigin; origin != nil && (len(parts) != 3 || origin["owner_user_id"] != parts[1]) {
+				return nil, errors.New("package working-copy source belongs to another account; acquire the published original in this account")
+			}
+		}
 		if err := saveProgress(in.Progress, progress); err != nil {
 			return nil, err
 		}
@@ -473,7 +594,7 @@ func importFile(ctx context.Context, client *transport.Client, token, binding, k
 	}
 	if in.InspectOnly {
 		return map[string]any{"data": map[string]any{"state": "inspected", "sha256": progress.Digest,
-			"steps": len(progress.Steps), "worldbooks": len(progress.Graph.Worldbooks), "media": len(progress.Graph.Media),
+			"steps": len(progress.Steps), "worldbooks": len(progress.Graph.Worldbooks), "skills": len(progress.Graph.Skills), "media": len(progress.Graph.Media),
 			"warnings": progress.Graph.Warnings, "progress": in.Progress}}, nil
 	}
 	for _, m := range progress.Graph.Media {
@@ -526,8 +647,11 @@ func importFile(ctx context.Context, client *transport.Client, token, binding, k
 		}
 		if step.Input.ParentID != "" || strings.Contains(step.Name, "_media") {
 			parent, parentKind := step.Input.ParentID, "worldbook"
-			if step.Name == "catalog_bind_worldbook" {
+			if step.Name == "catalog_bind_worldbook" || step.Name == "catalog_create_skill_binding" {
 				parentKind = "character"
+			}
+			if step.Name == "catalog_apply_collection_items" {
+				parentKind = "collection"
 			}
 			if strings.Contains(step.Name, "_media") {
 				parent, parentKind = step.Input.ID, "character"
@@ -564,6 +688,10 @@ func importFile(ctx context.Context, client *transport.Client, token, binding, k
 	id := text(progress.Graph.Character["id"])
 	if kind == "worldbook" {
 		id = text(progress.Graph.Worldbooks[0]["id"])
+	} else if kind == "skill" {
+		id = text(progress.Graph.Skills[0]["id"])
+	} else if kind == "collection" {
+		id = text(progress.Graph.Collection["id"])
 	}
 	return map[string]any{"data": map[string]any{"state": "saved", "id": id, "progress": in.Progress,
 		"steps": len(progress.Steps), "warnings": progress.Graph.Warnings}}, nil
@@ -726,8 +854,9 @@ func readCollection(ctx context.Context, client *transport.Client, token, path s
 func exportFile(ctx context.Context, client *transport.Client, token, kind string, in fileInput) (map[string]any, error) {
 	if in.Output == "" || in.File != "" || in.Progress != "" || in.RequestKey != "" || in.InspectOnly ||
 		!slices.Contains([]string{".json", ".png", ".charx", ".starry"}, strings.ToLower(filepath.Ext(in.Output))) ||
-		kind == "worldbook" && filepath.Ext(in.Output) != ".json" {
-		return nil, errors.New("invalid export; standalone worldbook format is JSON")
+		kind == "worldbook" && filepath.Ext(in.Output) != ".json" ||
+		(kind == "skill" || kind == "collection") && filepath.Ext(in.Output) != ".starry" {
+		return nil, errors.New("invalid export format for the selected resource type")
 	}
 	if _, err := os.Lstat(in.Output); !os.IsNotExist(err) {
 		return nil, errors.New("export output already exists or cannot be checked")
@@ -738,6 +867,8 @@ func exportFile(ctx context.Context, client *transport.Client, token, kind strin
 	}
 	defer os.RemoveAll(stage)
 	graph := fileGraph{Worldbooks: []map[string]any{}, Bindings: []map[string]any{},
+		Characters: []map[string]any{}, Skills: []map[string]any{}, SkillBindings: []map[string]any{},
+		CollectionItems: []map[string]any{}, AcquisitionOrigins: map[string]map[string]any{},
 		Relations: []map[string]any{}, Media: []map[string]any{}, Warnings: []string{}}
 	versions := map[string]string{}
 	mediaHashes := map[string]bool{}
@@ -754,8 +885,12 @@ func exportFile(ctx context.Context, client *transport.Client, token, kind strin
 			graph.Media = append(graph.Media, map[string]any{"sha256": hash, "mediaType": mime, "file": path})
 			mediaHashes[hash] = true
 		}
-		if ownerID == text(graph.Character["id"]) {
-			graph.Relations = append(graph.Relations, map[string]any{"role": role, "target_type": "asset", "target_id": hash})
+		isCharacter := ownerID == text(graph.Character["id"])
+		for _, c := range graph.Characters {
+			isCharacter = isCharacter || text(c["id"]) == ownerID
+		}
+		if isCharacter {
+			graph.Relations = append(graph.Relations, map[string]any{"role": role, "target_type": "asset", "target_id": hash, "character_id": ownerID})
 		} else {
 			for _, book := range graph.Worldbooks {
 				if text(book["id"]) == ownerID {
@@ -775,18 +910,32 @@ func exportFile(ctx context.Context, client *transport.Client, token, kind strin
 		}
 		return nil
 	}
+	workspaceSeen := map[string]map[string]any{}
 	var workspace func(string, string) (map[string]any, error)
 	workspace = func(t, id string) (map[string]any, error) {
 		path := "/api/v1/reading/catalog/" + t + "s/" + id
+		if values := workspaceSeen[path]; values != nil {
+			return values, nil
+		}
+		if len(workspaceSeen) >= 256 {
+			return nil, errors.New("workspace graph exceeds resource limit")
+		}
 		meta, values, err := readContent(ctx, client, token, path, nil)
 		if err != nil {
 			return nil, err
+		}
+		if values["acquisition_access"] == "read_only" {
+			return nil, errors.New("read-only acquired content cannot be exported; use a reference package")
 		}
 		versions[path] = text(meta["readingVersion"])
 		if issues, ok := values["exportIssues"].([]any); !ok || len(issues) != 0 {
 			return nil, errors.New("workspace graph contains unsupported or unavailable presentation resources")
 		}
 		values["id"] = id
+		workspaceSeen[path] = values
+		if origin := asObject(values["acquisition_origin"]); origin != nil {
+			graph.AcquisitionOrigins[id] = origin
+		}
 		if t == "worldbook" {
 			entries, err := readCollection(ctx, client, token, path+"/entries", nil, "")
 			if err != nil {
@@ -802,8 +951,32 @@ func exportFile(ctx context.Context, client *transport.Client, token, kind strin
 			}
 			values["entries"] = full
 			graph.Worldbooks = append(graph.Worldbooks, values)
-		} else {
-			graph.Character = values
+		} else if t == "skill" {
+			graph.Skills = append(graph.Skills, values)
+		} else if t == "collection" {
+			graph.Collection = values
+			items, err := readCollection(ctx, client, token, path+"/items", nil, text(meta["readingVersion"]))
+			if err != nil {
+				return nil, err
+			}
+			for _, item := range items {
+				fields := asObject(item["metadata"])
+				targetType, target := text(fields["target_type"]), text(fields["target_id"])
+				if !slices.Contains([]string{"character", "worldbook", "skill"}, targetType) || !assets.UUID.MatchString(target) {
+					return nil, errors.New("collection contains unresolved or unsupported members")
+				}
+				fields["id"], fields["collection_id"] = item["id"], id
+				graph.CollectionItems = append(graph.CollectionItems, fields)
+				if _, err := workspace(targetType, target); err != nil {
+					return nil, err
+				}
+			}
+		} else if t == "character" {
+			if kind == "character" {
+				graph.Character = values
+			} else {
+				graph.Characters = append(graph.Characters, values)
+			}
 			bindings, err := readCollection(ctx, client, token, path+"/bindings", nil, "")
 			if err != nil {
 				return nil, err
@@ -820,8 +993,26 @@ func exportFile(ctx context.Context, client *transport.Client, token, kind strin
 				if _, err := workspace("worldbook", target); err != nil {
 					return nil, err
 				}
-				graph.Bindings = append(graph.Bindings, map[string]any{"worldbook_id": target, "reference_type": fields["reference_type"]})
+				graph.Bindings = append(graph.Bindings, map[string]any{"id": b["id"], "character_id": id, "worldbook_id": target, "reference_type": fields["reference_type"]})
 			}
+			skills, err := readCollection(ctx, client, token, path+"/skills", nil, text(meta["readingVersion"]))
+			if err != nil {
+				return nil, err
+			}
+			for _, binding := range skills {
+				fields := asObject(binding["metadata"])
+				target := text(fields["skill_id"])
+				if !assets.UUID.MatchString(target) {
+					return nil, errors.New("unresolved Skill binding")
+				}
+				if _, err := workspace("skill", target); err != nil {
+					return nil, err
+				}
+				fields["id"], fields["character_id"] = binding["id"], id
+				graph.SkillBindings = append(graph.SkillBindings, fields)
+			}
+		} else {
+			return nil, errors.New("unsupported workspace type")
 		}
 		if media, ok := values["media"].([]any); ok {
 			for _, raw := range media {
@@ -835,6 +1026,7 @@ func exportFile(ctx context.Context, client *transport.Client, token, kind strin
 		}
 		return values, nil
 	}
+	formalSeen := map[string]map[string]any{}
 	var formal func(assets.ResourceInput, bool) (map[string]any, error)
 	formal = func(address assets.ResourceInput, root bool) (map[string]any, error) {
 		input := assets.PackageInput{ResourceInput: address, Profile: "full_package", Group: "all"}
@@ -856,26 +1048,80 @@ func exportFile(ctx context.Context, client *transport.Client, token, kind strin
 			return nil, errors.New("invalid published identity")
 		}
 		values["id"] = id
+		key := id + "/" + address.Revision
+		if previous := formalSeen[key]; previous != nil {
+			return previous, nil
+		}
+		if len(formalSeen) >= 256 {
+			return nil, errors.New("formal graph exceeds resource limit")
+		}
+		formalSeen[key] = values
 		links, _ := values["linked_assets"].([]any)
 		if integer(values["dependencyCount"]) != int64(len(links)) {
 			return nil, errors.New("export blocked by inaccessible dependencies")
 		}
 		if address.Type == "character" {
-			graph.Character = values
+			if root {
+				graph.Character = values
+			} else {
+				graph.Characters = append(graph.Characters, values)
+			}
 			for _, raw := range links {
 				link := asObject(raw)
-				if text(link["asset_type"]) != "worldbook" || !slices.Contains([]string{"embedded", "reference"}, text(link["relationship"])) {
+				targetType := text(link["asset_type"])
+				if !slices.Contains([]string{"worldbook", "skill"}, targetType) {
 					return nil, errors.New("unsupported formal dependency")
 				}
-				target := assets.ResourceInput{Type: "worldbook", Owner: text(link["owner_user_id"]),
+				target := assets.ResourceInput{Type: targetType, Owner: text(link["owner_user_id"]),
 					Slug: text(link["slug"]), Revision: text(link["resolved_revision_id"])}
 				book, err := formal(target, false)
 				if err != nil {
 					return nil, err
 				}
-				graph.Bindings = append(graph.Bindings, map[string]any{"worldbook_id": book["id"], "reference_type": link["relationship"]})
+				if targetType == "skill" {
+					binding := asObject(link["skill_binding"])
+					if binding == nil {
+						binding = map[string]any{}
+					}
+					binding["id"], binding["character_id"], binding["skill_id"] = stableID(key+fmt.Sprint(len(graph.SkillBindings))), id, book["id"]
+					graph.SkillBindings = append(graph.SkillBindings, binding)
+				} else {
+					reference := text(link["relationship"])
+					if reference == "linked" {
+						reference = "reference"
+					}
+					if reference != "reference" && reference != "embedded" {
+						return nil, errors.New("unsupported worldbook relationship")
+					}
+					graph.Bindings = append(graph.Bindings, map[string]any{"character_id": id, "worldbook_id": book["id"], "reference_type": reference})
+				}
 			}
-		} else {
+		} else if address.Type == "skill" {
+			if len(links) != 0 {
+				return nil, errors.New("unexpected Skill dependencies")
+			}
+			graph.Skills = append(graph.Skills, values)
+		} else if address.Type == "collection" {
+			graph.Collection = values
+			items, _ := values["items"].([]any)
+			if len(items) != len(links) {
+				return nil, errors.New("incomplete collection members")
+			}
+			for i, raw := range items {
+				item := asObject(raw)
+				targetType := text(item["asset_type"])
+				if !slices.Contains([]string{"character", "worldbook", "skill"}, targetType) {
+					return nil, errors.New("unsupported collection member")
+				}
+				target, err := formal(assets.ResourceInput{Type: targetType, Owner: text(item["owner_user_id"]), Slug: text(item["slug"]), Revision: text(item["resolved_revision_id"])}, false)
+				if err != nil {
+					return nil, err
+				}
+				fields := selectFields(item, strings.Fields("sort_order group note"))
+				fields["id"], fields["collection_id"], fields["target_type"], fields["target_id"] = stableID(key+fmt.Sprint(i)), id, targetType, target["id"]
+				graph.CollectionItems = append(graph.CollectionItems, fields)
+			}
+		} else if address.Type == "worldbook" {
 			for _, raw := range links {
 				link := asObject(raw)
 				if root || link["asset_type"] != "character" || link["owner_user_id"] != in.Owner || link["slug"] != in.Slug {
@@ -903,6 +1149,8 @@ func exportFile(ctx context.Context, client *transport.Client, token, kind strin
 			}
 			values["entries"] = full
 			graph.Worldbooks = append(graph.Worldbooks, values)
+		} else {
+			return nil, errors.New("unsupported formal resource")
 		}
 		filePath, _ := assets.PackagePath(assets.PackageInput{ResourceInput: address, Profile: "full_package", Group: "mediaFiles"})
 		u, _ := url.Parse(filePath)
@@ -915,6 +1163,9 @@ func exportFile(ctx context.Context, client *transport.Client, token, kind strin
 		}
 		roles := map[string]bool{}
 		for _, f := range files {
+			if address.Type == "skill" || address.Type == "collection" {
+				return nil, errors.New("unsupported external files on Skill or collection")
+			}
 			role, err := publishedMediaSlot(f)
 			if err != nil {
 				return nil, err
@@ -973,5 +1224,5 @@ func exportFile(ctx context.Context, client *transport.Client, token, kind strin
 		return nil, errors.New("cannot finalize export; output must not exist")
 	}
 	return map[string]any{"data": map[string]any{"state": "exported", "output": in.Output,
-		"worldbooks": len(graph.Worldbooks), "media": len(graph.Media)}}, nil
+		"worldbooks": len(graph.Worldbooks), "skills": len(graph.Skills), "media": len(graph.Media)}}, nil
 }

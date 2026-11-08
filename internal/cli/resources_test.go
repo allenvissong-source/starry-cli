@@ -36,6 +36,8 @@ func TestResourceCommandsUseSharedHTTPReading(t *testing.T) {
 		{[]string{"asset", "revisions"}, `{"type":"character","owner":"owner","slug":"dragon"}`, "/api/v1/reading/assets/character/owner/dragon/history"},
 		{[]string{"asset", "diff"}, `{"type":"character","owner":"owner","slug":"dragon","to":"12345678-1234-4234-8234-123456789abc"}`, "/api/v1/reading/assets/character/owner/dragon/difference"},
 		{[]string{"character", "list"}, `{}`, "/api/v1/reading/catalog/characters"},
+		{[]string{"resource", "use-access"}, `{"type":"skill","id":"12345678-1234-4234-8234-123456789abc"}`, "/api/v1/reading/catalog/skills/12345678-1234-4234-8234-123456789abc/use-access"},
+		{[]string{"resource", "edit-access"}, `{"type":"skill","id":"12345678-1234-4234-8234-123456789abc"}`, "/api/v1/reading/catalog/skills/12345678-1234-4234-8234-123456789abc/edit-access"},
 		{[]string{"worldbook", "entries", "get"}, `{"bookId":"12345678-1234-4234-8234-123456789abc","entryId":"22345678-1234-4234-8234-123456789abc"}`, "/api/v1/reading/catalog/worldbooks/12345678-1234-4234-8234-123456789abc/entries/22345678-1234-4234-8234-123456789abc"},
 	} {
 		var stdout, stderr bytes.Buffer
