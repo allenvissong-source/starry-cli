@@ -6,7 +6,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func TestTransportCreatedMetadataAndBoundaries(t *testing.T) {
@@ -54,5 +56,84 @@ func TestTransportCreatedMetadataAndBoundaries(t *testing.T) {
 	}
 	if _, err := client.Request(ctx, "POST", "/api/v1/created", "token", strings.Repeat("x", 64<<10)); err == nil {
 		t.Fatal("oversized request accepted")
+	}
+}
+
+func TestTransportCanceledRequestClosesUpstreamWithoutRetry(t *testing.T) {
+	for _, partialBody := range []bool{false, true} {
+		name := "waiting_for_headers"
+		if partialBody {
+			name = "reading_body"
+		}
+		t.Run(name, func(t *testing.T) {
+			started := make(chan struct{})
+			disconnected := make(chan struct{})
+			var requests atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				requests.Add(1)
+				if partialBody {
+					w.Header().Set("Content-Type", "application/json")
+					w.Write([]byte(`{"success":true,"data":`))
+					w.(http.Flusher).Flush()
+				}
+				close(started)
+				<-r.Context().Done()
+				close(disconnected)
+			}))
+			defer server.Close()
+			client, err := NewClient(Config{BackendURL: server.URL})
+			if err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			result := make(chan error, 1)
+			go func() {
+				_, err := client.Request(ctx, http.MethodGet, "/api/v1/wait", "token", nil)
+				result <- err
+			}()
+			select {
+			case <-started:
+			case <-time.After(3 * time.Second):
+				t.Fatal("upstream did not receive the request")
+			}
+			cancel()
+			select {
+			case err := <-result:
+				if !errors.Is(err, context.Canceled) {
+					t.Fatalf("cancellation became a retryable upstream error: %v", err)
+				}
+			case <-time.After(3 * time.Second):
+				t.Fatal("client did not stop after cancellation")
+			}
+			select {
+			case <-disconnected:
+			case <-time.After(3 * time.Second):
+				t.Fatal("cancellation did not reach the upstream connection")
+			}
+			if requests.Load() != 1 {
+				t.Fatalf("canceled request retried: %d requests", requests.Load())
+			}
+		})
+	}
+}
+
+func TestTransportExpiredContextDoesNotSend(t *testing.T) {
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+	}))
+	defer server.Close()
+	client, err := NewClient(Config{BackendURL: server.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+	defer cancel()
+	if _, err := client.Request(ctx, http.MethodGet, "/api/v1/wait", "token", nil); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("expired deadline became an upstream error: %v", err)
+	}
+	if requests.Load() != 0 {
+		t.Fatal("expired request reached the upstream")
 	}
 }

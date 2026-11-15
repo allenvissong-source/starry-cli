@@ -144,6 +144,9 @@ func (b *Client) UploadRaw(ctx context.Context, path, token, mediaType string, s
 func (b *Client) send(req *http.Request) (Response, error) {
 	resp, err := b.client.Do(req)
 	if err != nil {
+		if contextErr := req.Context().Err(); contextErr != nil {
+			return Response{}, contextErr
+		}
 		return Response{}, NewAPIError(503, "upstream_unavailable")
 	}
 	defer resp.Body.Close()
@@ -162,6 +165,11 @@ func (b *Client) send(req *http.Request) (Response, error) {
 		} `json:"error"`
 	}
 	data, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20+1))
+	if err != nil {
+		if contextErr := req.Context().Err(); contextErr != nil {
+			return Response{}, contextErr
+		}
+	}
 	if len(data) > 4<<20 {
 		return Response{}, NewAPIError(resp.StatusCode, "response_too_large")
 	}

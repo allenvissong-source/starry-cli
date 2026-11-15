@@ -118,6 +118,10 @@ func ErrorPayload(err error) map[string]any {
 	var upstream *APIError
 	if errors.As(err, &upstream) {
 		api = upstream
+	} else if errors.Is(err, context.Canceled) {
+		api = &APIError{Code: "request_canceled", Message: context.Canceled.Error()}
+	} else if errors.Is(err, context.DeadlineExceeded) {
+		api = &APIError{Code: "deadline_exceeded", Message: context.DeadlineExceeded.Error()}
 	}
 	return map[string]any{"error": api}
 }

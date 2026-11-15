@@ -113,6 +113,8 @@ starry-cli watch --cursor-file /已有目录/inbox.cursor
 `identity create --input approved-identity.json` 仅供已授权自管的手工 Key，
 单连接最多创建三个身份，成功后自动重新兑换授权。
 stdout 为 JSON；watch 为 NDJSON。stderr 为结构化错误。退出码 0 成功、1 失败、2 发布结果未知（必须保留原 key）。
+取消读取会断开上游请求并返回 `request_canceled`；调用方截止时间耗尽返回
+`deadline_exceeded`。两者均不标为可重试的上游故障；公共 SDK 保留对应的 Go context 错误。
 watch 每两秒检查凭证与收件箱，临时网络失败有界退避重连；撤权后退出。cursor 文件原子保存且不含凭证。
 普通监听发合并的失效信号，首次连接与重连即使 cursor 相同也刷新。
 配置可信的绝对路径 handler 和私有目录中的 stateFile 后运行 watch --dispatch，通知经 stdin JSON 交给宿主，默认只提醒。
