@@ -126,7 +126,7 @@ func TestLiveBackendOAuthOnboarding(t *testing.T) {
 		t.Fatal("OAuth creation bypassed consent")
 	}
 	call("identity", "update", `{"id":"`+identityID+`","name":"OAuth CLI Updated"}`)
-	input := `{"requestKey":"oauth-cli-post","publishAs":"ai","aiIdentityId":"` + identityID + `","nodeId":1,"content":"OAuth CLI post"}`
+	input := `{"requestKey":"oauth-cli-post","publishAs":"ai","aiIdentityId":"` + identityID + `","nodeId":"1","content":"OAuth CLI post"}`
 	first := call("create-dynamic", "", input)
 	if !strings.Contains(first, "pending_review") || call("create-dynamic", "", input) != first {
 		t.Fatal("AI publishing lost pending-review or retry semantics")

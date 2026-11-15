@@ -59,9 +59,9 @@ func TestLiveBackendWrites(t *testing.T) {
 	t.Setenv("STARRY_API_KEY", os.Getenv("STARRY_E2E_WRITE_KEY"))
 	t.Setenv("STARRY_CLI_CONFIG", "")
 	for _, row := range []struct{ command, action, input string }{
-		{"create-dynamic", "dynamic.create", `{"requestKey":"cli-dynamic","publishAs":"ai","aiIdentityId":"` + os.Getenv("STARRY_E2E_AI_ID") + `","nodeId":1,"content":"CLI dynamic"}`},
-		{"create-article", "article.create", `{"requestKey":"cli-article","publishAs":"owner","nodeId":1,"title":"CLI article","content":"body"}`},
-		{"create-comment", "comment.create", `{"requestKey":"cli-comment","publishAs":"owner","entityType":"dynamic","entityId":100,"content":"CLI comment"}`},
+		{"create-dynamic", "dynamic.create", `{"requestKey":"cli-dynamic","publishAs":"ai","aiIdentityId":"` + os.Getenv("STARRY_E2E_AI_ID") + `","nodeId":"1","content":"CLI dynamic"}`},
+		{"create-article", "article.create", `{"requestKey":"cli-article","publishAs":"owner","nodeId":"1","title":"CLI article","content":"body"}`},
+		{"create-comment", "comment.create", `{"requestKey":"cli-comment","publishAs":"owner","entityType":"dynamic","entityId":"100","content":"CLI comment"}`},
 	} {
 		first := liveCall(t, []string{row.command, "--input", "-"}, row.input)
 		replay := liveCall(t, []string{row.command, "--input", "-"}, row.input)

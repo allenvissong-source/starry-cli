@@ -37,7 +37,7 @@ func TestCLIDirectExchangeReadPublishAndUnknown(t *testing.T) {
 				w.Write([]byte(`{"success":false,"error":{"code":"upstream_unavailable"}}`))
 				return
 			}
-			w.Write([]byte(`{"success":true,"data":{"action":"dynamic.create","entityId":9007199254740993}}`))
+			w.Write([]byte(`{"success":true,"data":{"action":"dynamic.create","entityId":"9007199254740993"}}`))
 			return
 		}
 		w.Write([]byte(`{"success":true,"data":{"items":[{"id":"9007199254740993"}]}}`))

@@ -15,7 +15,7 @@ import (
 
 type SearchInput struct {
 	Type    string   `json:"type,omitempty" jsonschema:"character, worldbook, skill, collection or all; all returns only granted types"`
-	Keyword string   `json:"keyword,omitempty" jsonschema:"Optional metadata keyword, up to 128 Unicode scalars"`
+	Keyword string   `json:"keyword,omitempty" jsonschema:"Optional metadata keyword, up to 128 Unicode scalars. Chinese segmented terms use AND. Results are updated_at descending then ID descending, not relevance ranking."`
 	Tags    []string `json:"tags,omitempty" jsonschema:"All required tags, at most ten"`
 	Author  string   `json:"author,omitempty" jsonschema:"Exact owner user ID"`
 	Limit   *int     `json:"limit,omitempty" jsonschema:"1-20, default 10"`
@@ -35,7 +35,7 @@ type PackageInput struct {
 	Group        string `json:"group,omitempty" jsonschema:"all, basic, identity, behavior, advanced, media, links, entries, entry, mediaFiles or delivery. Read all selected fields before treating content as complete."`
 	EntryOrdinal int    `json:"entryOrdinal,omitempty" jsonschema:"1-based ordinal from the fixed revision's entry list; required with group=entry"`
 	FileRefID    string `json:"fileRefId,omitempty" jsonschema:"Exact file-ref UUID from group=mediaFiles; required with group=delivery"`
-	Limit        *int   `json:"limit,omitempty" jsonschema:"Entry page 1-50; media page 1-20"`
+	Limit        *int   `json:"limit,omitempty" jsonschema:"Entry and media page 1-20, default 10"`
 	BodyLimit    *int   `json:"bodyLimit,omitempty" jsonschema:"1000-12000 Unicode scalars, default 6000"`
 	Cursor       string `json:"cursor,omitempty" jsonschema:"Continuation cursor; repeat all original arguments"`
 }
@@ -44,6 +44,14 @@ type HistoryInput struct {
 	ResourceInput
 	Limit  *int   `json:"limit,omitempty" jsonschema:"1-20, default 10"`
 	Cursor string `json:"cursor,omitempty" jsonschema:"Opaque continuation"`
+}
+
+type LineageInput struct {
+	Type   string `json:"type" jsonschema:"character, worldbook, skill or collection"`
+	Owner  string `json:"owner" jsonschema:"Exact owner user ID"`
+	Slug   string `json:"slug" jsonschema:"Resource slug"`
+	Limit  *int   `json:"limit,omitempty" jsonschema:"Children 1-20, default 10"`
+	Cursor string `json:"cursor,omitempty" jsonschema:"Opaque cursor; repeat the address and limit. Invalid or expired cursors require a new first page."`
 }
 
 type DiffInput struct {
@@ -102,9 +110,6 @@ func PackagePath(in PackageInput) (string, error) {
 		return "", err
 	}
 	maximum := 20
-	if in.Group == "entries" {
-		maximum = 50
-	}
 	q, err := transport.PageQuery(in.Limit, maximum, in.Cursor, in.BodyLimit)
 	if err != nil {
 		return "", err
@@ -187,6 +192,19 @@ func Call(ctx context.Context, client *transport.Client, token, name string, dat
 					q.Set("revision", in.Revision)
 				}
 				path += "/history?" + q.Encode()
+			}
+		}
+	case "assets_list_lineage":
+		var in LineageInput
+		err = transport.DecodeInput(data, &in)
+		if err == nil {
+			path, err = resourcePath(ResourceInput{Type: in.Type, Owner: in.Owner, Slug: in.Slug})
+			if err == nil {
+				var q url.Values
+				q, err = transport.PageQuery(in.Limit, 20, in.Cursor, nil)
+				if err == nil {
+					path += "/lineage?" + q.Encode()
+				}
 			}
 		}
 	case "assets_diff":

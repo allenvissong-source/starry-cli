@@ -27,20 +27,20 @@ func TestSharedPublishPreservesIDsAndUnknownIntent(t *testing.T) {
 			w.Write([]byte(`{"success":false,"error":{"code":"upstream_unavailable"}}`))
 			return
 		}
-		w.Write([]byte(`{"success":true,"data":{"action":"article.create","entityId":9007199254740993,"operationId":"op"}}`))
+		w.Write([]byte(`{"success":true,"data":{"action":"article.create","entityId":"9007199254740993","operationId":"op"}}`))
 	}))
 	defer server.Close()
 	client, err := NewClient(Config{BackendURL: server.URL, PublicWebURL: "https://starry.example"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	input := json.RawMessage(`{"publishAs":"owner","requestKey":"same-intent","entityType":"article","entityId":9007199254740993,"content":"ok"}`)
+	input := json.RawMessage(`{"publishAs":"owner","requestKey":"same-intent","entityType":"article","entityId":"9007199254740993","content":"ok"}`)
 	out, err := client.Call(context.Background(), "token", "community_create_comment", input)
 	if err != nil {
 		t.Fatal(err)
 	}
 	data, _ := json.Marshal(out)
-	if payload != "9007199254740993" || !strings.Contains(string(data), "/article/9007199254740993") {
+	if payload != `"9007199254740993"` || !strings.Contains(string(data), "/article/9007199254740993") {
 		t.Fatal(payload, string(data))
 	}
 	input = json.RawMessage(strings.ReplaceAll(string(input), `"ok"`, `"unknown"`))

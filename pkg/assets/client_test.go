@@ -71,3 +71,54 @@ func TestSDKReadingLimitsErrorsAndFixedRevision(t *testing.T) {
 		}
 	}
 }
+
+func TestSDKLineageUsesSingleBoundedReadAndPreservesCursorErrors(t *testing.T) {
+	calls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if r.URL.Path != "/api/v1/reading/assets/character/owner-1/dragon/lineage" ||
+			r.URL.Query().Get("limit") != "2" || r.URL.Query().Get("revision") != "" {
+			t.Error("lineage address or page parameters changed", r.URL)
+		}
+		if r.URL.Query().Get("cursor") == "expired" {
+			w.WriteHeader(http.StatusGone)
+			w.Write([]byte(`{"success":false,"error":{"code":"cursor_expired"}}`))
+			return
+		}
+		w.Write([]byte(`{"success":true,"data":{"current":{"id":"root"},"items":[{"id":"child"}],"page":{"hasMore":true,"nextCursor":"next","endReason":"limit"}}}`))
+	}))
+	defer server.Close()
+	client, _ := transport.NewClient(transport.Config{BackendURL: server.URL})
+	for _, cursor := range []string{"", "expired"} {
+		data, _ := json.Marshal(map[string]any{"type": "character", "owner": "owner-1", "slug": "dragon", "limit": 2, "cursor": cursor})
+		result, err := Call(context.Background(), client, "delegated", "assets_list_lineage", data)
+		if cursor == "" && (err != nil || result == nil) {
+			t.Fatal(result, err)
+		}
+		if cursor != "" {
+			api, ok := err.(*transport.APIError)
+			if !ok || api.Code != "cursor_expired" {
+				t.Fatal("expired cursor became an empty success", err)
+			}
+		}
+	}
+	if calls != 2 {
+		t.Fatal("lineage auto-expanded or auto-restarted", calls)
+	}
+	for _, invalid := range []string{
+		`{"type":"live2d","owner":"owner-1","slug":"dragon"}`,
+		`{"type":"character","owner":"owner-1","slug":"dragon","limit":21}`,
+		`{"type":"character","owner":"owner-1","slug":"dragon","revision":"12345678-1234-4234-8234-123456789abc"}`,
+	} {
+		if _, err := Call(context.Background(), client, "delegated", "assets_list_lineage", json.RawMessage(invalid)); err == nil {
+			t.Fatal("invalid lineage accepted", invalid)
+		}
+	}
+	if calls != 2 {
+		t.Fatal("invalid input reached backend", calls)
+	}
+	limit := 21
+	if _, err := PackagePath(PackageInput{ResourceInput: ResourceInput{Type: "worldbook", Owner: "owner-1", Slug: "book"}, Group: "entries", Limit: &limit}); err == nil {
+		t.Fatal("machine entry limit exceeded 20")
+	}
+}

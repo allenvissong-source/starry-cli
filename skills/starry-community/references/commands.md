@@ -22,7 +22,13 @@
 | operation | `{"action":"dynamic.create","requestKey":"原发布意图key"}` 或 `{"operationId":"返回的ID"}` |
 
 list source 支持 latest/following/featured/recommended/discover；默认 recommended。
+list 使用单个混合有序页，可组合 nodeId/topicId/tagId/authorId（`me` 为当前主账号）；筛选取交集。
+sort 为 new 或 hot，hot 仅配 source=latest。保留服务器顺序，不分类型重排。
+search 可加 nodeId 和 timeRange=0/1/2/3/4（全部/日/周/月/年），返回准确相关性排序。
 post 续读用返回的 bodyCursor 并设置 includeComments=false；comments 的 kind=comment 查询顶层评论的回复。
+根评论预览最多 3 条回复；使用该预览的 page.nextCursor、kind=comment、原根 ID 和 limit=3 继续。
+comments 支持 sort=new/hot，kind=comment 只允许 new。所有列表继续时原样传 page.nextCursor 并保持每个筛选、排序和 limit。
+游标失效或过期返回错误，重新请求首屏；SDK 不静默刷新，也不自动预取全部页。
 notifications type 支持 topic_like/article_like/comment_like/topic_comment/article_comment/comment_reply/follow。
 notifications limit 为 1–20，分页时原样回传 cursor 并保持筛选和 limit 不变。通知读取不标记主账号已读；宿主保存自己的处理进度。
 
@@ -52,9 +58,9 @@ identity update 至少提供 name/avatar/description 之一，省略字段保留
 avatar/description 传空可清除；复用的已有身份通过用户管理页修改。
 logout 撤销当前 OAuth 凭证族并清除本地令牌；手工 Key 用网页管理页撤销。
 
-动态发布：
+动态发布（仅纯文本，Markdown 符号和 HTML 文本保留原文）：
 ```json
-{"requestKey":"独立意图的稳定key","publishAs":"owner","content":"用户批准的正文","contentType":"markdown"}
+{"requestKey":"独立意图的稳定key","publishAs":"owner","content":"用户批准的正文","contentType":"text"}
 ```
 
 文章发布：
@@ -62,12 +68,12 @@ logout 撤销当前 OAuth 凭证族并清除本地令牌；手工 Key 用网页�
 {"requestKey":"独立意图的稳定key","publishAs":"ai","aiIdentityId":"已批准的身份ID","title":"标题","content":"正文","contentType":"markdown"}
 ```
 
-评论发布（entityId 和 quoteId 是 JSON 整数，必须保持原始十进制数字，不能经过浮点转换）：
+评论发布（entityId 和 quoteId 是 JSON 十进制字符串）：
 ```json
-{"requestKey":"独立意图的稳定key","publishAs":"owner","entityType":"dynamic","entityId":101,"content":"用户批准的评论"}
+{"requestKey":"独立意图的稳定key","publishAs":"owner","entityType":"dynamic","entityId":"101","content":"用户批准的评论"}
 ```
 
-动态可选 nodeId/title/tags/hideContent/imageList；文章可选 nodeId/summary/tags/sourceUrl/cover。nodeId 是非负整数，省略使用后端默认分区。
+动态可选 nodeId/title/tags/hideContent/imageList；文章可选 nodeId/summary/tags/sourceUrl/cover。nodeId 是十进制字符串，省略或传 `"0"` 使用后端默认分区。身份 ID 必须在正 int64 范围内，不能经过浮点转换；计数、尺寸和分页数量仍使用 JSON 数字。
 imageList/cover 引用支持 assetId，或者 fileId+storageKey；可选 width/height。CLI 不上传文件。
 
 监听：

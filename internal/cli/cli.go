@@ -32,7 +32,7 @@ const help = `Starry CLI — 直接连接后端，无需 MCP 服务
 命令: login logout whoami identity [list|create|update]
       list search topics post comments stats notifications inbox
       create-dynamic create-article create-comment operation
-      asset search|get|package|revisions|diff
+      asset search|get|package|revisions|lineage|diff
       character list|get|create|update|delete|bindings|bind|unbind|media set
       worldbook list|get|create|update|delete|entries list|get|create|update|delete|apply|media set
       skill list|get|create|update|delete
@@ -147,6 +147,7 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 		resourceName = map[string]string{
 			"asset search": "assets_search", "asset get": "assets_get_revision",
 			"asset package": "assets_get_package", "asset revisions": "assets_list_revisions", "asset diff": "assets_diff",
+			"asset lineage":  "assets_list_lineage",
 			"character list": "catalog_list_characters", "character get": "catalog_get_character",
 			"character bindings":    "catalog_list_character_bindings",
 			"character skills list": "catalog_list_character_skills",

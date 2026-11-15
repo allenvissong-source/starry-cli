@@ -88,6 +88,15 @@ Windows 使用本用户专属、受 ACL 保护的目录。OAuth 的 `stro_` 刷�
 HTTPS origin 或回环 HTTP 才被允许，重定向被禁止。
 
 ## 使用
+
+正式资产列表、正文与历史使用同一有界读取契约。`asset search` 搜索四类公开资产
+的元数据，按更新时间降序、ID 降序排列；中文分词后的多词为 AND。继续读取时原样
+回传 `data.page.nextCursor` 并保留全部筛选参数，游标失效须从首屏重新开始。
+`asset package` 的 `group=entries` 只列世界书条目元数据，使用返回的固定 revision
+及 `entryOrdinal` 再读所选条目；正文必须读完所有字段和分页才完整。机器列表和
+条目页最多 20 项。`asset revisions` 只读取一页修订摘要，不自动计算 diff；
+`asset lineage` 返回当前节点、可见父节点及一页子节点，用子节点的地址逐层展开。
+
 ```sh
 starry-cli identity
 starry-cli whoami

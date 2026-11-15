@@ -4,7 +4,7 @@
 
 | CLI | MCP |
 | --- | --- |
-| asset search/get/package/revisions/diff | assets_search/get_revision/get_package/list_revisions/diff |
+| asset search/get/package/revisions/lineage/diff | assets_search/get_revision/get_package/list_revisions/list_lineage/diff |
 | character list/get | catalog_list_characters/get_character |
 | character create/update/delete | catalog_create_character/update_character/delete_character |
 | character bindings/bind/unbind | catalog_list_character_bindings/bind_worldbook/unbind_worldbook |

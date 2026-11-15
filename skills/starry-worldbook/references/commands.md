@@ -4,7 +4,7 @@
 
 | CLI | MCP |
 | --- | --- |
-| asset search/get/package/revisions/diff | assets_search/get_revision/get_package/list_revisions/diff |
+| asset search/get/package/revisions/lineage/diff | assets_search/get_revision/get_package/list_revisions/list_lineage/diff |
 | worldbook list/get/create/update/delete | catalog_list_worldbooks/get_worldbook/create_worldbook/update_worldbook/delete_worldbook |
 | worldbook entries list/get/create/update/delete/apply | catalog_list_worldbook_entries/get_worldbook_entry/create_worldbook_entry/update_worldbook_entry/delete_worldbook_entry/apply_worldbook_entry_changes |
 | worldbook media set | catalog_set_worldbook_media |
@@ -42,7 +42,7 @@ create 指定新条目 UUID、parentId、父书 readingVersion、fields，不填
 ## 正式阅读、发布与文件
 
 asset package 输入 type=worldbook、owner/slug、固定 revision、profile=full_package；
-group=all 读书级配置，group=entries 分页读条目摘要，group=entry 加 entryOrdinal 读取某条正文。所有续页重复原参数；entries 最大 50，普通列表最大 20，bodyLimit=1000–12000。
+group=all 读书级配置，group=entries 分页读条目元数据，group=entry 加 entryOrdinal 读取所选条目正文。沿用首屏固定 revision 与全部原参数续读；entries 与普通列表最大 20，bodyLimit=1000–12000。asset revisions 只列一页修订摘要；asset lineage 返回当前节点、可见父节点及一页子节点，按子节点的 type/owner/slug 逐层展开。asset search 的元数据匹配结果按更新时间及 ID 降序排列，中文分词多词为 AND；游标失效应重新开始，不自行降级为空结果。
 
 preview 输入 `{"type":"worldbook","draftId":"书UUID","slug":"目标slug","publishAs":"owner","requestKey":"稳定预览"}`。检查 result.snapshot 与依赖；publish 保留所有选择，加 previewId=预览 operationId、snapshot，使用独立稳定发布 requestKey。首次可选择 visibility/packageAccessPolicy，后续保留策略。策略调整带当前 policy_N ifMatch 与用户已批准的 confirmations，不自动补确认。
 

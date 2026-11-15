@@ -8,7 +8,6 @@ import (
 	"net/url"
 	"regexp"
 	"slices"
-	"strconv"
 )
 
 type PublishSelection struct {
@@ -25,10 +24,10 @@ type MediaRef struct {
 type DynamicCreateInput struct {
 	PublishSelection
 	RequestKey  string     `json:"requestKey" jsonschema:"Stable key for this one publishing intent. Reuse unchanged after timeout; never replace to resolve unknown outcome."`
-	NodeID      int64      `json:"nodeId,omitempty" jsonschema:"Existing content node ID; omit to use backend default."`
+	NodeID      string     `json:"nodeId,omitempty" jsonschema:"Existing content node ID as a decimal string; omit to use backend default."`
 	Title       string     `json:"title,omitempty"`
 	Content     string     `json:"content"`
-	ContentType string     `json:"contentType,omitempty" jsonschema:"text or markdown"`
+	ContentType string     `json:"contentType,omitempty" jsonschema:"Plain text only (text). Markdown and HTML markers remain literal; omitted format is text."`
 	Tags        []string   `json:"tags,omitempty"`
 	HideContent string     `json:"hideContent,omitempty"`
 	ImageList   []MediaRef `json:"imageList,omitempty" jsonschema:"Previously uploaded media references owned by this account; this tool does not upload files."`
@@ -36,7 +35,7 @@ type DynamicCreateInput struct {
 type ArticleCreateInput struct {
 	PublishSelection
 	RequestKey  string    `json:"requestKey" jsonschema:"Stable publishing intent key; reuse unchanged after timeout."`
-	NodeID      int64     `json:"nodeId,omitempty"`
+	NodeID      string    `json:"nodeId,omitempty"`
 	Title       string    `json:"title"`
 	Summary     string    `json:"summary,omitempty"`
 	Content     string    `json:"content"`
@@ -49,9 +48,9 @@ type CommentCreateInput struct {
 	PublishSelection
 	RequestKey string `json:"requestKey" jsonschema:"Stable publishing intent key; reuse unchanged after timeout."`
 	EntityType string `json:"entityType" jsonschema:"Target: dynamic, article, or comment."`
-	EntityID   int64  `json:"entityId" jsonschema:"Positive target ID."`
+	EntityID   string `json:"entityId" jsonschema:"Positive target ID as a decimal string."`
 	Content    string `json:"content"`
-	QuoteID    int64  `json:"quoteId,omitempty"`
+	QuoteID    string `json:"quoteId,omitempty"`
 }
 type OperationInput struct {
 	OperationID string `json:"operationId,omitempty" jsonschema:"Operation ID from a successful create; otherwise use action and requestKey."`
@@ -60,6 +59,10 @@ type OperationInput struct {
 }
 
 var requestKeyPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$`)
+
+func validOptionalID(id string) bool {
+	return id == "" || id == "0" || validID(id)
+}
 
 func validSelection(selection PublishSelection) bool {
 	return selection.PublishAs == "owner" && selection.AIIdentityID == "" ||
@@ -128,18 +131,7 @@ func (b *Client) AddOperationLink(value any, action string) {
 		action = stored
 	}
 	kind := map[string]string{"dynamic.create": "dynamic", "article.create": "article"}[action]
-	var raw string
-	switch id := row["entityId"].(type) {
-	case json.Number:
-		raw = id.String()
-	case float64:
-		if id > 9007199254740991 || id <= 0 || id != float64(int64(id)) {
-			return
-		}
-		raw = strconv.FormatInt(int64(id), 10)
-	case string:
-		raw = id
-	}
+	raw, _ := row["entityId"].(string)
 	if kind == "" || !validID(raw) {
 		return
 	}

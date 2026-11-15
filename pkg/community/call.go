@@ -56,7 +56,7 @@ func (b *Client) Call(ctx context.Context, token, name string, data json.RawMess
 		if err = DecodeInput(data, &input); err != nil {
 			return nil, err
 		}
-		if !validSelection(input.PublishSelection) || input.NodeID < 0 || input.Content == "" {
+		if !validSelection(input.PublishSelection) || !validOptionalID(input.NodeID) || input.Content == "" {
 			return nil, errors.New("invalid dynamic arguments")
 		}
 		return b.publish(ctx, token, "dynamic.create", input.RequestKey, input)
@@ -65,7 +65,7 @@ func (b *Client) Call(ctx context.Context, token, name string, data json.RawMess
 		if err = DecodeInput(data, &input); err != nil {
 			return nil, err
 		}
-		if !validSelection(input.PublishSelection) || input.NodeID < 0 || input.Title == "" || input.Content == "" {
+		if !validSelection(input.PublishSelection) || !validOptionalID(input.NodeID) || input.Title == "" || input.Content == "" {
 			return nil, errors.New("invalid article arguments")
 		}
 		return b.publish(ctx, token, "article.create", input.RequestKey, input)
@@ -74,7 +74,7 @@ func (b *Client) Call(ctx context.Context, token, name string, data json.RawMess
 		if err = DecodeInput(data, &input); err != nil {
 			return nil, err
 		}
-		if input.PublishAs != "owner" || !validSelection(input.PublishSelection) || input.EntityID <= 0 || input.QuoteID < 0 || input.Content == "" ||
+		if input.PublishAs != "owner" || !validSelection(input.PublishSelection) || !validID(input.EntityID) || !validOptionalID(input.QuoteID) || input.Content == "" ||
 			!slices.Contains([]string{"dynamic", "article", "comment"}, input.EntityType) {
 			return nil, errors.New("invalid comment arguments")
 		}

@@ -21,18 +21,23 @@ const (
 )
 
 type ListInput struct {
-	Kind    string `json:"kind,omitempty" jsonschema:"Post kind: dynamic, article, or all (default all)"`
-	Source  string `json:"source,omitempty" jsonschema:"Sort source: latest, following, featured, recommended (default), or discover"`
-	NodeID  string `json:"nodeId,omitempty" jsonschema:"Existing positive content node ID"`
-	TopicID string `json:"topicId,omitempty" jsonschema:"Existing positive topic ID; combined with nodeId as AND"`
-	Limit   *int   `json:"limit,omitempty" jsonschema:"Page size 1-20, default 10"`
-	Cursor  string `json:"cursor,omitempty" jsonschema:"Opaque cursor from the previous result"`
+	Kind     string `json:"kind,omitempty" jsonschema:"Post kind: dynamic, article, or all (default all)"`
+	Source   string `json:"source,omitempty" jsonschema:"Sort source: latest, following, featured, recommended (default), or discover"`
+	NodeID   string `json:"nodeId,omitempty" jsonschema:"Existing positive content node ID"`
+	TopicID  string `json:"topicId,omitempty" jsonschema:"Existing positive topic ID; combined with nodeId as AND"`
+	TagID    string `json:"tagId,omitempty" jsonschema:"Existing positive tag ID; combined with all other filters as AND"`
+	AuthorID string `json:"authorId,omitempty" jsonschema:"Opaque author user ID, or me for the authenticated owner"`
+	Sort     string `json:"sort,omitempty" jsonschema:"new (default) or hot; hot requires source=latest"`
+	Limit    *int   `json:"limit,omitempty" jsonschema:"Page size 1-20, default 10"`
+	Cursor   string `json:"cursor,omitempty" jsonschema:"Opaque cursor from the previous result"`
 }
 type SearchInput struct {
-	Keyword string `json:"keyword" jsonschema:"Required keyword, at most 128 Unicode code points"`
-	Kind    string `json:"kind,omitempty" jsonschema:"Post kind: dynamic, article, or all (default all)"`
-	Limit   *int   `json:"limit,omitempty" jsonschema:"Page size 1-20, default 10"`
-	Cursor  string `json:"cursor,omitempty" jsonschema:"Opaque cursor from the previous result"`
+	Keyword   string `json:"keyword" jsonschema:"Required keyword, at most 128 Unicode code points"`
+	Kind      string `json:"kind,omitempty" jsonschema:"Post kind: dynamic, article, or all (default all)"`
+	NodeID    string `json:"nodeId,omitempty" jsonschema:"Existing positive node ID; combined with keyword as AND"`
+	TimeRange *int   `json:"timeRange,omitempty" jsonschema:"0 all (default), 1 day, 2 week, 3 month, 4 year"`
+	Limit     *int   `json:"limit,omitempty" jsonschema:"Page size 1-20, default 10"`
+	Cursor    string `json:"cursor,omitempty" jsonschema:"Opaque cursor from the previous result"`
 }
 type TopicsInput struct {
 	Limit  *int   `json:"limit,omitempty" jsonschema:"Page size 1-50, default 20"`
@@ -51,6 +56,7 @@ type CommentInput struct {
 	ID     string `json:"id" jsonschema:"Positive decimal target ID; keep it as a string"`
 	Limit  *int   `json:"limit,omitempty" jsonschema:"Page size 1-20, default 10"`
 	Cursor string `json:"cursor,omitempty" jsonschema:"Opaque cursor from the previous result"`
+	Sort   string `json:"sort,omitempty" jsonschema:"new (default) or hot; replies with kind=comment require new"`
 }
 type StatsInput struct {
 	Subject      string `json:"subject,omitempty" jsonschema:"Whose totals: owner (default, whole account) or ai (one subordinate AI identity)"`
@@ -124,7 +130,7 @@ func listPath(input ListInput) (string, error) {
 		return "", errors.New("invalid cursor")
 	}
 	q := url.Values{"kind": {kind}, "source": {source}}
-	for _, item := range []struct{ key, value string }{{"nodeId", input.NodeID}, {"topicId", input.TopicID}} {
+	for _, item := range []struct{ key, value string }{{"nodeId", input.NodeID}, {"topicId", input.TopicID}, {"tagId", input.TagID}} {
 		if item.value == "" {
 			continue
 		}
@@ -132,6 +138,18 @@ func listPath(input ListInput) (string, error) {
 			return "", fmt.Errorf("invalid %s", item.key)
 		}
 		q.Set(item.key, item.value)
+	}
+	if input.AuthorID != "" {
+		if !validAuthorID(input.AuthorID) {
+			return "", errors.New("invalid authorId")
+		}
+		q.Set("authorId", input.AuthorID)
+	}
+	if input.Sort != "" {
+		if (input.Sort != "new" && input.Sort != "hot") || (input.Sort == "hot" && source != "latest") {
+			return "", errors.New("sort must be new, or hot with source=latest")
+		}
+		q.Set("sort", input.Sort)
 	}
 	if input.Limit != nil {
 		q.Set("limit", strconv.Itoa(*input.Limit))
@@ -144,7 +162,7 @@ func listPath(input ListInput) (string, error) {
 
 func searchPath(input SearchInput) (string, error) {
 	keyword := strings.TrimSpace(input.Keyword)
-	if keyword == "" || utf8.RuneCountInString(keyword) > maxKeywordRunes {
+	if keyword == "" || !utf8.ValidString(keyword) || utf8.RuneCountInString(keyword) > maxKeywordRunes {
 		return "", errors.New("keyword must be non-empty and at most 128 Unicode code points")
 	}
 	kind, err := checkKind(input.Kind, true)
@@ -158,6 +176,18 @@ func searchPath(input SearchInput) (string, error) {
 		return "", errors.New("invalid cursor")
 	}
 	q := url.Values{"keyword": {keyword}, "kind": {kind}}
+	if input.NodeID != "" {
+		if !validID(input.NodeID) {
+			return "", errors.New("invalid nodeId")
+		}
+		q.Set("nodeId", input.NodeID)
+	}
+	if input.TimeRange != nil {
+		if *input.TimeRange < 0 || *input.TimeRange > 4 {
+			return "", errors.New("timeRange must be between 0 and 4")
+		}
+		q.Set("timeRange", strconv.Itoa(*input.TimeRange))
+	}
 	if input.Limit != nil {
 		q.Set("limit", strconv.Itoa(*input.Limit))
 	}
@@ -242,6 +272,12 @@ func commentPath(input CommentInput) (string, error) {
 		return "", errors.New("invalid cursor")
 	}
 	q := url.Values{"kind": {strings.TrimSpace(input.Kind)}, "id": {input.ID}}
+	if input.Sort != "" {
+		if (input.Sort != "new" && input.Sort != "hot") || (input.Sort == "hot" && strings.TrimSpace(input.Kind) == "comment") {
+			return "", errors.New("sort must be new, or hot for post comments")
+		}
+		q.Set("sort", input.Sort)
+	}
 	if input.Limit != nil {
 		q.Set("limit", strconv.Itoa(*input.Limit))
 	}
@@ -249,6 +285,24 @@ func commentPath(input CommentInput) (string, error) {
 		q.Set("cursor", input.Cursor)
 	}
 	return "/api/v1/community/comments?" + q.Encode(), nil
+}
+
+func validAuthorID(raw string) bool {
+	if len(raw) < 1 || len(raw) > 128 {
+		return false
+	}
+	nonDigit := false
+	for _, ch := range raw {
+		if ch >= '0' && ch <= '9' {
+			continue
+		}
+		if (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || strings.ContainsRune("._:-", ch) {
+			nonDigit = true
+			continue
+		}
+		return false
+	}
+	return nonDigit
 }
 
 var notificationTypes = []string{"topic_like", "article_like", "comment_like",
