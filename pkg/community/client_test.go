@@ -62,7 +62,7 @@ func TestWatchCoalescesAndRechecksAuth(t *testing.T) {
 	}))
 	defer server.Close()
 	client, _ := NewClient(Config{BackendURL: server.URL})
-	principal := Principal{OwnerUserID: "a", Scopes: []string{"community.read"}}
+	principal := Principal{OwnerUserID: "1000", Scopes: []string{"community.read"}}
 	events := 0
 	err := Watch(context.Background(), "old", 10*time.Millisecond, func(context.Context) (ExchangeResult, error) {
 		calls++
@@ -82,7 +82,7 @@ func TestWatchRefreshesUnchangedSavedRevision(t *testing.T) {
 	}))
 	defer server.Close()
 	client, _ := NewClient(Config{BackendURL: server.URL})
-	principal := Principal{OwnerUserID: "a", Scopes: []string{"community.read"}}
+	principal := Principal{OwnerUserID: "1000", Scopes: []string{"community.read"}}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	events := 0

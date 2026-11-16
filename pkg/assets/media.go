@@ -119,7 +119,7 @@ func Download(ctx context.Context, client *transport.Client, token string, in Do
 		digest, href = target.Hash, target.Href
 	} else if in.Source == "published" {
 		if in.ID != "" || in.MediaRole != "" || !UUID.MatchString(in.FileRefID) || !UUID.MatchString(in.Revision) ||
-			!userID.MatchString(in.Owner) || !slugID.MatchString(in.Slug) {
+			!transport.ValidUserID(in.Owner) || !slugID.MatchString(in.Slug) {
 			return nil, errors.New("published download needs owner, slug, fixed revision and fileRefId")
 		}
 		base := "/api/v1/reading/assets/" + in.Type + "/" + url.PathEscape(in.Owner) + "/" + url.PathEscape(in.Slug) + "/media"

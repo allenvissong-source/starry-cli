@@ -41,7 +41,7 @@ func TestSkillUpdateSourceAndExactAcquisitionChoices(t *testing.T) {
 	if _, err := Collaboration(context.Background(), client, "delegate", "assets_get_skill_update_source", json.RawMessage(`{"id":"`+id+`"}`)); err != nil {
 		t.Fatal(err)
 	}
-	plan := `{"type":"skill","owner":"author","slug":"role","revision":"` + id + `","skillUpdate":` + update + `}`
+	plan := `{"type":"skill","owner":"1000","slug":"role","revision":"` + id + `","skillUpdate":` + update + `}`
 	if _, err := Collaboration(context.Background(), client, "delegate", "assets_plan_acquisition", json.RawMessage(plan)); err != nil {
 		t.Fatal(err)
 	}

@@ -20,7 +20,7 @@ func TestCLIDirectExchangeReadPublishAndUnknown(t *testing.T) {
 			if r.Header.Get("Authorization") != "Bearer stai_test" {
 				t.Error("wrong API key")
 			}
-			w.Write([]byte(`{"success":true,"data":{"token":"delegate","principal":{"ownerUserId":"a","scopes":["community.read"]}}}`))
+			w.Write([]byte(`{"success":true,"data":{"token":"delegate","principal":{"ownerUserId":"1000","scopes":["community.read"]}}}`))
 			return
 		}
 		if r.Header.Get("Authorization") != "Bearer delegate" {

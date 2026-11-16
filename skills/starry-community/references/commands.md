@@ -22,7 +22,7 @@
 | operation | `{"action":"dynamic.create","requestKey":"原发布意图key"}` 或 `{"operationId":"返回的ID"}` |
 
 list source 支持 latest/following/featured/recommended/discover；默认 recommended。
-list 使用单个混合有序页，可组合 nodeId/topicId/tagId/authorId（`me` 为当前主账号）；筛选取交集。
+list 使用单个混合有序页，可组合 nodeId/topicId/tagId/authorId；authorId 使用规范十进制 UID 字符串（如 `"1000"`），或 `"me"` 表示当前主账号；筛选取交集。
 sort 为 new 或 hot，hot 仅配 source=latest。保留服务器顺序，不分类型重排。
 search 可加 nodeId 和 timeRange=0/1/2/3/4（全部/日/周/月/年），返回准确相关性排序。
 post 续读用返回的 bodyCursor 并设置 includeComments=false；comments 的 kind=comment 查询顶层评论的回复。
@@ -73,7 +73,7 @@ logout 撤销当前 OAuth 凭证族并清除本地令牌；手工 Key 用网页�
 {"requestKey":"独立意图的稳定key","publishAs":"owner","entityType":"dynamic","entityId":"101","content":"用户批准的评论"}
 ```
 
-动态可选 nodeId/title/tags/hideContent/imageList；文章可选 nodeId/summary/tags/sourceUrl/cover。nodeId 是十进制字符串，省略或传 `"0"` 使用后端默认分区。身份 ID 必须在正 int64 范围内，不能经过浮点转换；计数、尺寸和分页数量仍使用 JSON 数字。
+动态可选 nodeId/title/tags/hideContent/imageList；文章可选 nodeId/summary/tags/sourceUrl/cover。nodeId 是十进制字符串，省略或传 `"0"` 使用后端默认分区。内容 ID 为正 int64 十进制字符串；主账号 UID 为非负 int64 十进制字符串，0–999 保留且不代表权限，普通新账号从 1000 分配。拒绝旧字符串账号 ID、前导零和溢出，不能经过浮点转换；计数、尺寸和分页数量仍使用 JSON 数字。公开 username 唯一，私人 nickname 不用于公开署名，principal.ownerName 表示公开用户名；AI 身份 ID 保持独立类型。
 imageList/cover 引用支持 assetId，或者 fileId+storageKey；可选 width/height。CLI 不上传文件。
 
 监听：

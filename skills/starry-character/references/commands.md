@@ -41,7 +41,7 @@ creator_notes、character_version、tags。后端拒绝未知字段和可信署�
 
 ## 分段读取与发布
 
-正式 package 输入 `{"type":"character","owner":"所有者","slug":"slug","profile":"full_package","group":"all","bodyLimit":6000}`。后续页带首轮固定 revision 和原参数、cursor；结束以 page.hasMore=false 为准。历史/diff 可能含已删全文，需要相同完整包边界。
+正式 package 输入 `{"type":"character","owner":"1000","slug":"slug","profile":"full_package","group":"all","bodyLimit":6000}`。owner 是规范十进制主账号 UID 字符串；公开用户名 username 与私人昵称 nickname 均不能作资源地址，角色字段 nickname 保持角色内容语义。后续页带首轮固定 revision 和原参数、cursor；结束以 page.hasMore=false 为准。历史/diff 可能含已删全文，需要相同完整包边界。
 
 预览输入 `{"type":"character","draftId":"草稿UUID","slug":"目标slug","publishAs":"owner","requestKey":"稳定预览意图"}`。首次发布可明确 visibility/packageAccessPolicy；已发布资源默认保留策略。提交保留全部选择，requestKey 使用独立发布意图，并加 previewId=预览 operationId、snapshot=预览 result.snapshot。
 

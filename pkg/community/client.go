@@ -61,7 +61,7 @@ func decodeExchange(data json.RawMessage, err error) (ExchangeResult, error) {
 		return ExchangeResult{}, err
 	}
 	var result ExchangeResult
-	if json.Unmarshal(data, &result) != nil || result.Token == "" || result.Principal.OwnerUserID == "" {
+	if json.Unmarshal(data, &result) != nil || result.Token == "" || !transport.ValidUserID(result.Principal.OwnerUserID) {
 		return ExchangeResult{}, newAPIError(503, "upstream_unavailable")
 	}
 	return result, nil

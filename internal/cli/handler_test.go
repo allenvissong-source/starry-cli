@@ -138,7 +138,7 @@ func TestDispatchLocalRestartPaginationUnknownAndRevocation(t *testing.T) {
 	for _, mode := range []string{"valid", "invalid", "unknown", "revoked"} {
 		t.Run(mode, func(t *testing.T) {
 			cfg := testHandler(t, mode)
-			principal := community.Principal{OwnerUserID: "a", IntegrationID: "connection", CredentialID: "credential", GrantVersion: 1, Scopes: []string{"community.read"}}
+			principal := community.Principal{OwnerUserID: "1000", IntegrationID: "connection", CredentialID: "credential", GrantVersion: 1, Scopes: []string{"community.read"}}
 			exchanges, reads := 0, 0
 			late := false
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -356,7 +356,7 @@ func TestWatchDispatchBudgetAndCancellationKeepCursor(t *testing.T) {
 			if mode == "cancelled" {
 				cfg.Args[1] = "host-mode=timeout"
 			}
-			principal := community.Principal{OwnerUserID: "a", IntegrationID: "c", CredentialID: "k", GrantVersion: 1, Scopes: []string{"community.read"}}
+			principal := community.Principal{OwnerUserID: "1000", IntegrationID: "c", CredentialID: "k", GrantVersion: 1, Scopes: []string{"community.read"}}
 			notificationReads := 0
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				var data any

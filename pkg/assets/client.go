@@ -17,14 +17,14 @@ type SearchInput struct {
 	Type    string   `json:"type,omitempty" jsonschema:"character, worldbook, skill, collection or all; all returns only granted types"`
 	Keyword string   `json:"keyword,omitempty" jsonschema:"Optional metadata keyword, up to 128 Unicode scalars. Chinese segmented terms use AND. Results are updated_at descending then ID descending, not relevance ranking."`
 	Tags    []string `json:"tags,omitempty" jsonschema:"All required tags, at most ten"`
-	Author  string   `json:"author,omitempty" jsonschema:"Exact owner user ID"`
+	Author  string   `json:"author,omitempty" jsonschema:"Exact owner decimal UID string"`
 	Limit   *int     `json:"limit,omitempty" jsonschema:"1-20, default 10"`
 	Cursor  string   `json:"cursor,omitempty" jsonschema:"Repeat the same filters with this opaque cursor"`
 }
 
 type ResourceInput struct {
 	Type     string `json:"type" jsonschema:"character, worldbook, skill or collection"`
-	Owner    string `json:"owner" jsonschema:"Owner user ID, not a resource UUID"`
+	Owner    string `json:"owner" jsonschema:"Canonical decimal owner UID string"`
 	Slug     string `json:"slug" jsonschema:"Resource slug"`
 	Revision string `json:"revision,omitempty" jsonschema:"Canonical lowercase revision UUID; omit for current head"`
 }
@@ -48,7 +48,7 @@ type HistoryInput struct {
 
 type LineageInput struct {
 	Type   string `json:"type" jsonschema:"character, worldbook, skill or collection"`
-	Owner  string `json:"owner" jsonschema:"Exact owner user ID"`
+	Owner  string `json:"owner" jsonschema:"Exact owner decimal UID string"`
 	Slug   string `json:"slug" jsonschema:"Resource slug"`
 	Limit  *int   `json:"limit,omitempty" jsonschema:"Children 1-20, default 10"`
 	Cursor string `json:"cursor,omitempty" jsonschema:"Opaque cursor; repeat the address and limit. Invalid or expired cursors require a new first page."`
@@ -63,11 +63,10 @@ type DiffInput struct {
 }
 
 var UUID = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
-var userID = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$`)
 var slugID = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,127}$`)
 
 func resourcePath(in ResourceInput) (string, error) {
-	if !IsResourceType(in.Type) || !userID.MatchString(in.Owner) || !slugID.MatchString(in.Slug) || (in.Revision != "" && !UUID.MatchString(in.Revision)) {
+	if !IsResourceType(in.Type) || !transport.ValidUserID(in.Owner) || !slugID.MatchString(in.Slug) || (in.Revision != "" && !UUID.MatchString(in.Revision)) {
 		return "", errors.New("invalid resource address")
 	}
 	return "/api/v1/reading/assets/" + in.Type + "/" + url.PathEscape(in.Owner) + "/" + url.PathEscape(in.Slug), nil
@@ -81,7 +80,7 @@ func SearchPath(in SearchInput) (string, error) {
 	if in.Type == "" {
 		in.Type = "all"
 	}
-	if in.Type != "all" && !IsResourceType(in.Type) || !transport.ValidText(in.Keyword, 128) || len(in.Tags) > 10 || (in.Author != "" && !userID.MatchString(in.Author)) {
+	if in.Type != "all" && !IsResourceType(in.Type) || !transport.ValidText(in.Keyword, 128) || len(in.Tags) > 10 || (in.Author != "" && !transport.ValidUserID(in.Author)) {
 		return "", errors.New("invalid search arguments")
 	}
 	for _, tag := range in.Tags {

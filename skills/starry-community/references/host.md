@@ -41,13 +41,13 @@ Windows 需将目录放在本用户专属、受系统 ACL 保护的位置；CLI 
     "updatedAt": "2026-11-03T09:00:00Z"
   },
   "items": [],
-  "principal": {"ownerUserId": "主账号", "integrationId": "连接", "credentialId": "凭证标识", "scopes": ["community.read"], "grantVersion": 1},
+  "principal": {"ownerUserId": "1000", "integrationId": "连接", "credentialId": "凭证标识", "scopes": ["community.read"], "grantVersion": 1},
   "allowedActions": []
 }
 ```
 
 items 是派发前重新校验相同授权、重新读取当前页后仍存在的通知，最多 batchLimit 条。
-不可见或已删除目标不能靠历史正文补齐。ID 始终为十进制字符串。
+不可见或已删除目标不能靠历史正文补齐。通知 ID 和主账号 ownerUserId 始终为规范十进制字符串；taskId、integrationId 和 credentialId 保持各自类型。
 输入不含 API Key、JWT 或配置路径。子进程只继承 PATH/HOME/USERPROFILE/SYSTEMROOT/
 TEMP/TMP/TMPDIR/LANG。宿主需要自己的可信连接；默认只提醒，通知不授予发布权限。
 

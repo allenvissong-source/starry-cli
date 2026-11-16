@@ -13,7 +13,7 @@ func TestResourceCommandsUseSharedHTTPReading(t *testing.T) {
 	lastPath := ""
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v1/integration-token" {
-			w.Write([]byte(`{"success":true,"data":{"token":"delegate","principal":{"ownerUserId":"owner"}}}`))
+			w.Write([]byte(`{"success":true,"data":{"token":"delegate","principal":{"ownerUserId":"1000"}}}`))
 			return
 		}
 		lastPath = r.URL.Path
@@ -31,10 +31,10 @@ func TestResourceCommandsUseSharedHTTPReading(t *testing.T) {
 		input, path string
 	}{
 		{[]string{"asset", "search"}, `{"type":"character","keyword":"龙城"}`, "/api/v1/reading/assets"},
-		{[]string{"asset", "get"}, `{"type":"character","owner":"owner","slug":"dragon"}`, "/api/v1/reading/assets/character/owner/dragon"},
-		{[]string{"asset", "package"}, `{"type":"worldbook","owner":"owner","slug":"book","group":"entries"}`, "/api/v1/reading/assets/worldbook/owner/book/entries"},
-		{[]string{"asset", "revisions"}, `{"type":"character","owner":"owner","slug":"dragon"}`, "/api/v1/reading/assets/character/owner/dragon/history"},
-		{[]string{"asset", "diff"}, `{"type":"character","owner":"owner","slug":"dragon","to":"12345678-1234-4234-8234-123456789abc"}`, "/api/v1/reading/assets/character/owner/dragon/difference"},
+		{[]string{"asset", "get"}, `{"type":"character","owner":"1000","slug":"dragon"}`, "/api/v1/reading/assets/character/1000/dragon"},
+		{[]string{"asset", "package"}, `{"type":"worldbook","owner":"1000","slug":"book","group":"entries"}`, "/api/v1/reading/assets/worldbook/1000/book/entries"},
+		{[]string{"asset", "revisions"}, `{"type":"character","owner":"1000","slug":"dragon"}`, "/api/v1/reading/assets/character/1000/dragon/history"},
+		{[]string{"asset", "diff"}, `{"type":"character","owner":"1000","slug":"dragon","to":"12345678-1234-4234-8234-123456789abc"}`, "/api/v1/reading/assets/character/1000/dragon/difference"},
 		{[]string{"character", "list"}, `{}`, "/api/v1/reading/catalog/characters"},
 		{[]string{"resource", "use-access"}, `{"type":"skill","id":"12345678-1234-4234-8234-123456789abc"}`, "/api/v1/reading/catalog/skills/12345678-1234-4234-8234-123456789abc/use-access"},
 		{[]string{"resource", "edit-access"}, `{"type":"skill","id":"12345678-1234-4234-8234-123456789abc"}`, "/api/v1/reading/catalog/skills/12345678-1234-4234-8234-123456789abc/edit-access"},

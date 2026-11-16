@@ -103,7 +103,7 @@ func TestVerifyOAuthAccessUsesBackendThenChecksExactAudienceAndExpiry(t *testing
 			return
 		}
 		json.NewEncoder(w).Encode(map[string]any{"success": true, "data": map[string]any{"principal": map[string]any{
-			"ownerUserId": "owner", "integrationId": "connection", "credentialId": "family", "credentialKind": kind, "scopes": []string{"community.read"},
+			"ownerUserId": "1000", "integrationId": "connection", "credentialId": "family", "credentialKind": kind, "scopes": []string{"community.read"},
 		}}})
 	}))
 	defer server.Close()

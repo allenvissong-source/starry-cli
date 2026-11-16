@@ -29,7 +29,7 @@ func TestCollaborationPreservesIntentAndDisallowsUnknownFields(t *testing.T) {
 	}))
 	defer server.Close()
 	client, _ := transport.NewClient(transport.Config{BackendURL: server.URL})
-	input := `{"type":"character","owner":"owner","slug":"card","requestKey":"unchanged","publishAs":"owner","expectedRevision":"12345678-1234-4234-8234-123456789abc","suggestionId":"12345678-1234-4234-8234-123456789abd"}`
+	input := `{"type":"character","owner":"1000","slug":"card","requestKey":"unchanged","publishAs":"owner","expectedRevision":"12345678-1234-4234-8234-123456789abc","suggestionId":"12345678-1234-4234-8234-123456789abd"}`
 	if _, err := Collaboration(context.Background(), client, "delegate", "assets_adopt_suggestion", json.RawMessage(input)); err != nil {
 		t.Fatal(err)
 	}
@@ -55,7 +55,7 @@ func TestAcquireUsesCompleteGraphIntentAndRejectsForkOnlyFields(t *testing.T) {
 	}))
 	defer server.Close()
 	client, _ := transport.NewClient(transport.Config{BackendURL: server.URL})
-	input := `{"type":"collection","owner":"owner","slug":"set","requestKey":"acquire-set","expectedRevision":"12345678-1234-4234-8234-123456789abc","planHash":"` + strings.Repeat("a", 64) + `"}`
+	input := `{"type":"collection","owner":"1000","slug":"set","requestKey":"acquire-set","expectedRevision":"12345678-1234-4234-8234-123456789abc","planHash":"` + strings.Repeat("a", 64) + `"}`
 	if !IsCollaboration("assets_acquire") {
 		t.Fatal("acquire not dispatched")
 	}
@@ -103,7 +103,7 @@ func TestCollaborationLostResponseKeepsOriginalOperationIntent(t *testing.T) {
 	}))
 	defer server.Close()
 	client, _ := transport.NewClient(transport.Config{BackendURL: server.URL})
-	input := json.RawMessage(`{"type":"character","owner":"owner","slug":"card","requestKey":"original-adoption","publishAs":"owner","expectedRevision":"12345678-1234-4234-8234-123456789abc","suggestionId":"12345678-1234-4234-8234-123456789abd"}`)
+	input := json.RawMessage(`{"type":"character","owner":"1000","slug":"card","requestKey":"original-adoption","publishAs":"owner","expectedRevision":"12345678-1234-4234-8234-123456789abc","suggestionId":"12345678-1234-4234-8234-123456789abd"}`)
 	_, err := Collaboration(context.Background(), client, "delegate", "assets_adopt_suggestion", input)
 	var api *transport.APIError
 	if !errors.As(err, &api) || api.Code != "outcome_unknown" || api.Retryable || writes.Load() != 1 {
@@ -141,7 +141,7 @@ func TestAcquisitionPlanAndCommitPreserveExplicitEmptySelection(t *testing.T) {
 	}))
 	defer server.Close()
 	client, _ := transport.NewClient(transport.Config{BackendURL: server.URL})
-	plan := `{"type":"collection","owner":"owner","slug":"set","revision":"12345678-1234-4234-8234-123456789abc","selection":[],"strategy":"copy","mode":"read_only"}`
+	plan := `{"type":"collection","owner":"1000","slug":"set","revision":"12345678-1234-4234-8234-123456789abc","selection":[],"strategy":"copy","mode":"read_only"}`
 	if _, err := Collaboration(context.Background(), client, "delegate", "assets_plan_acquisition", json.RawMessage(plan)); err != nil {
 		t.Fatal(err)
 	}

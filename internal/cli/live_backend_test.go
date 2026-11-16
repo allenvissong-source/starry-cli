@@ -26,7 +26,7 @@ func TestLiveBackendReads(t *testing.T) {
 	t.Setenv("STARRY_BACKEND_URL", os.Getenv("STARRY_E2E_BACKEND"))
 	t.Setenv("STARRY_API_KEY", os.Getenv("STARRY_E2E_KEY_A"))
 	t.Setenv("STARRY_CLI_CONFIG", "")
-	if !strings.Contains(liveCall(t, []string{"identity"}, ""), "user_a") {
+	if !strings.Contains(liveCall(t, []string{"identity"}, ""), `"ownerUserId":"1000"`) {
 		t.Fatal("wrong owner")
 	}
 	liveCall(t, []string{"list", "--input", "-"}, `{"source":"latest","kind":"all"}`)

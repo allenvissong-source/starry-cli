@@ -18,8 +18,8 @@ func TestReadFiltersValidateAndStayBoundToContinuation(t *testing.T) {
 		err  error
 		want url.Values
 	}
-	path, err := listPath(ListInput{Kind: "all", Source: "latest", NodeID: "1", TopicID: "2", TagID: "3", AuthorID: "owner:1", Sort: "hot", Cursor: "next"})
-	cases := []readCase{{"list", path, err, url.Values{"kind": {"all"}, "source": {"latest"}, "nodeId": {"1"}, "topicId": {"2"}, "tagId": {"3"}, "authorId": {"owner:1"}, "sort": {"hot"}, "cursor": {"next"}}}}
+	path, err := listPath(ListInput{Kind: "all", Source: "latest", NodeID: "1", TopicID: "2", TagID: "3", AuthorID: "1000", Sort: "hot", Cursor: "next"})
+	cases := []readCase{{"list", path, err, url.Values{"kind": {"all"}, "source": {"latest"}, "nodeId": {"1"}, "topicId": {"2"}, "tagId": {"3"}, "authorId": {"1000"}, "sort": {"hot"}, "cursor": {"next"}}}}
 	path, err = searchPath(SearchInput{Keyword: " 天气 ", NodeID: "2", TimeRange: &week, Cursor: "search"})
 	cases = append(cases, readCase{"search", path, err, url.Values{"kind": {"all"}, "keyword": {"天气"}, "nodeId": {"2"}, "timeRange": {"2"}, "cursor": {"search"}}})
 	for _, item := range cases {
@@ -30,7 +30,7 @@ func TestReadFiltersValidateAndStayBoundToContinuation(t *testing.T) {
 	}
 	for _, input := range []ListInput{
 		{Source: "recommended", Sort: "hot"}, {Source: "latest", Sort: "other"},
-		{TagID: "0"}, {AuthorID: "123"}, {AuthorID: "../owner?x=1"},
+		{TagID: "0"}, {AuthorID: "owner:1"}, {AuthorID: "../owner?x=1"},
 	} {
 		if _, err := listPath(input); err == nil {
 			t.Fatalf("invalid list accepted: %+v", input)

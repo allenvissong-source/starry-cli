@@ -164,7 +164,7 @@ func TestConcurrentOAuthRefreshPersistReuseGrantChangeAndLogout(t *testing.T) {
 				return
 			}
 			json.NewEncoder(w).Encode(map[string]any{"success": true, "data": map[string]any{"principal": community.Principal{
-				OwnerUserID: "owner", IntegrationID: "connection", CredentialID: "family", CredentialKind: "oauth_refresh", GrantVersion: int64(version),
+				OwnerUserID: "1000", IntegrationID: "connection", CredentialID: "family", CredentialKind: "oauth_refresh", GrantVersion: int64(version),
 			}}})
 		case "/oauth/revoke":
 			r.ParseForm()

@@ -11,6 +11,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"starry-cli/pkg/transport"
 )
 
 const CLIClientID = "starry-cli"
@@ -204,7 +206,7 @@ func (b *Client) VerifyAccess(ctx context.Context, token, issuer, resource strin
 	var out struct {
 		Principal Principal `json:"principal"`
 	}
-	if json.Unmarshal(data, &out) != nil || out.Principal.OwnerUserID == "" ||
+	if json.Unmarshal(data, &out) != nil || !transport.ValidUserID(out.Principal.OwnerUserID) ||
 		out.Principal.IntegrationID == "" || out.Principal.CredentialID == "" || out.Principal.CredentialKind != "oauth_refresh" {
 		return ExchangeResult{}, newAPIError(401, "integration.unauthorized")
 	}

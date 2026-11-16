@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"unicode/utf8"
+
+	"starry-cli/pkg/transport"
 )
 
 const (
@@ -26,7 +28,7 @@ type ListInput struct {
 	NodeID   string `json:"nodeId,omitempty" jsonschema:"Existing positive content node ID"`
 	TopicID  string `json:"topicId,omitempty" jsonschema:"Existing positive topic ID; combined with nodeId as AND"`
 	TagID    string `json:"tagId,omitempty" jsonschema:"Existing positive tag ID; combined with all other filters as AND"`
-	AuthorID string `json:"authorId,omitempty" jsonschema:"Opaque author user ID, or me for the authenticated owner"`
+	AuthorID string `json:"authorId,omitempty" jsonschema:"Canonical decimal account UID string, or me for the authenticated owner"`
 	Sort     string `json:"sort,omitempty" jsonschema:"new (default) or hot; hot requires source=latest"`
 	Limit    *int   `json:"limit,omitempty" jsonschema:"Page size 1-20, default 10"`
 	Cursor   string `json:"cursor,omitempty" jsonschema:"Opaque cursor from the previous result"`
@@ -288,21 +290,7 @@ func commentPath(input CommentInput) (string, error) {
 }
 
 func validAuthorID(raw string) bool {
-	if len(raw) < 1 || len(raw) > 128 {
-		return false
-	}
-	nonDigit := false
-	for _, ch := range raw {
-		if ch >= '0' && ch <= '9' {
-			continue
-		}
-		if (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || strings.ContainsRune("._:-", ch) {
-			nonDigit = true
-			continue
-		}
-		return false
-	}
-	return nonDigit
+	return raw == "me" || transport.ValidUserID(raw)
 }
 
 var notificationTypes = []string{"topic_like", "article_like", "comment_like",
