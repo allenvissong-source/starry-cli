@@ -16,8 +16,8 @@ CLI 通过获准的 HTTP 接口操作工作区与正式资源。文件转换由�
 更新选定角色时，计划和提交都传相同的 `skillUpdate: {sourceSkillId, expectedVersion, bindings: [{id, expectedVersion}]}`。版本是 Catalog `entity_version`，绑定默认不选，显式空数组只获取新版。计划 `binding_updates` 可回读作者推荐和保留的稀疏使用者配置；提交原子获取新版并替换选定绑定锚点，旧 Skill 与其他角色保留。回执 `updated_bindings` 含旧/新绑定 ID；完整回读这些资源以及原绑定删除。此操作额外要求 `catalog.character.bindings.write`，计划过期重新审阅，结果不明保留原输入查原操作。
 
 角色支持 JSON、PNG `chara`、CharX 和当前 codec 的 `.starry` 角色包。
-独立世界书只支持 JSON；`.starry` 角色包可携带多本世界书。现有交换格式的
-新写入 `package_version=3`，仍读真实已分发的版本 2 角色包，接入功能对外统一称 V1。
+独立世界书只支持 JSON；`.starry` 角色包可携带多本世界书。
+角色、Skill 与合集的 `.starry` 包统一读写整数 `package_version=1`，由共享编解码层验证完整资源、Skill 文件库存、绑定、作者归属及获取来源。角色包没有 Skill 时也必须声明空库存和空绑定。其他格式号和不完整的旧结构明确拒绝；历史样包需从作者源离线重新构建，不能只改 manifest 数字。`character_version` 是作者维护的内容版本，原样保留。
 Skill 支持标准 Markdown、单 Skill 目录 ZIP、独立 `.starry`；
 合集支持 `.starry`，保留角色、世界书、共享 Skill、关闭的 Skill 绑定、
 成员排序/分组/说明及获取来源。带 `.starry` manifest 的 ZIP 走严格包解析，

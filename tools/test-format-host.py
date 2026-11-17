@@ -17,6 +17,11 @@ def run(action, kind, source, output, success=True):
     assert (result.returncode == 0) == success, result.stderr.decode()
 def dump(path, value):
     path.write_text(json.dumps(value, ensure_ascii=False))
+def assert_v1(path, kind):
+    with zipfile.ZipFile(path) as archive:
+        manifest = json.loads(archive.read("manifest.json"))
+    assert type(manifest["package_version"]) is int and manifest["package_version"] == 1
+    assert manifest["package_type"] == "starry_" + kind
 def png(color):
     def chunk(kind, payload):
         return struct.pack(">I", len(payload)) + kind + payload + struct.pack(">I", zlib.crc32(kind+payload))
@@ -75,6 +80,7 @@ with tempfile.TemporaryDirectory(prefix="starry-format-contract-") as temp:
     dump(graphfile,graph)
     package = root/"full.starry"
     run("export","character",graphfile,package)
+    assert_v1(package, "character")
     unpacked=root/"unpacked"
     unpacked.mkdir()
     run("inspect","character",package,unpacked)
@@ -84,6 +90,7 @@ with tempfile.TemporaryDirectory(prefix="starry-format-contract-") as temp:
     assert len(actual["media"])==4 and len(actual["relations"])==4
     assert actual["character"]["description"]==card["description"]
     assert actual["character"]["depth_prompt"]==card["depth_prompt"]
+    assert actual["character"]["character_version"]==card["character_version"]
     assert {m["sha256"] for m in actual["media"]}=={m["sha256"] for m in graph["media"]}
     assert all(e["extensions"]["starry_file_source"]["vectorized"] is True
                for e in actual["worldbooks"][0]["entries"])
@@ -150,6 +157,7 @@ with tempfile.TemporaryDirectory(prefix="starry-format-contract-") as temp:
     dump(graphfile,skill_graph)
     skill_package = root/"skill.starry"
     run("export","skill",graphfile,skill_package)
+    assert_v1(skill_package, "skill")
     stage=root/"skill-stage"
     stage.mkdir()
     run("inspect","skill",skill_package,stage)
@@ -179,6 +187,7 @@ with tempfile.TemporaryDirectory(prefix="starry-format-contract-") as temp:
     dump(graphfile,graph)
     role_package=root/"role.starry"
     run("export","character",graphfile,role_package)
+    assert_v1(role_package, "character")
     stage=root/"role-stage"
     stage.mkdir()
     run("inspect","character",role_package,stage)
@@ -200,6 +209,7 @@ with tempfile.TemporaryDirectory(prefix="starry-format-contract-") as temp:
     dump(graphfile,graph)
     set_package=root/"collection.starry"
     run("export","collection",graphfile,set_package)
+    assert_v1(set_package, "collection")
     stage=root/"collection-stage"
     stage.mkdir()
     run("inspect","collection",set_package,stage)
@@ -221,6 +231,17 @@ with tempfile.TemporaryDirectory(prefix="starry-format-contract-") as temp:
         with zipfile.ZipFile(output,"w") as archive:
             for name,value in files.items():
                 archive.writestr(name,value)
+    for kind, package in (("character", role_package), ("skill", skill_package),
+                          ("collection", set_package)):
+        for index, version in enumerate((2, 3, "1", 1.5)):
+            changed=root/f"invalid-{kind}-{index}.starry"
+            alter_package(package, changed, "manifest.json",
+                          lambda data: data.update(package_version=version))
+            stage=root/f"invalid-{kind}-{index}"
+            stage.mkdir()
+            run("inspect", kind, changed, stage, False)
+            assert not (stage/"graph.json").exists()
+    print("PASS V1 format: character, Skill and collection reject other versions and invalid types")
     with zipfile.ZipFile(role_package) as archive:
         preset_path=next(name for name in archive.namelist() if name.endswith("/preset.json"))
     for field,value in (("description","Alternate presentation"),("name","Different preset"),
