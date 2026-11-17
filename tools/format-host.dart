@@ -256,7 +256,7 @@ final timestamp = DateTime.utc(2000);
 void requireDefaultPreset(Map<String, dynamic> preset, String name) {
   if (preset['is_default'] != true ||
       preset['is_archived'] == true ||
-      preset['name'] != name ||
+      (preset['name'] != name && preset['name'] != 'Default') ||
       !const {'default', 'export'}.contains(preset['slug']) ||
       (preset['description'] as String? ?? '').isNotEmpty) {
     throw const FormatException(

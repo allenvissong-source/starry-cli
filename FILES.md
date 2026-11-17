@@ -22,6 +22,8 @@ Skill 支持标准 Markdown、单 Skill 目录 ZIP、独立 `.starry`；
 合集支持 `.starry`，保留角色、世界书、共享 Skill、关闭的 Skill 绑定、
 成员排序/分组/说明及获取来源。带 `.starry` manifest 的 ZIP 走严格包解析，
 原 Skill ID 与获取来源保持一致。
+默认展示预设接受角色名或制作工具生成的 `Default`；自定义预设名称、说明及
+归档状态仍拒绝，避免把有意义的展示配置静默丢弃。
 角色 JSON、PNG、CharX 中显式附带的世界书即使没有条目，也保留书配置与
 embedded 绑定；空条目不会被当作未附带世界书。
 

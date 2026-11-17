@@ -244,6 +244,13 @@ with tempfile.TemporaryDirectory(prefix="starry-format-contract-") as temp:
     print("PASS V1 format: character, Skill and collection reject other versions and invalid types")
     with zipfile.ZipFile(role_package) as archive:
         preset_path=next(name for name in archive.namelist() if name.endswith("/preset.json"))
+    default_package=root/"forge-default.starry"
+    alter_package(role_package,default_package,preset_path,
+                  lambda data: data.update({"name":"Default","slug":"default"}))
+    default_stage=root/"forge-default-stage"
+    default_stage.mkdir()
+    run("inspect","character",default_package,default_stage)
+    assert json.loads((default_stage/"graph.json").read_text())["character"]["name"] == card["name"]
     for field,value in (("description","Alternate presentation"),("name","Different preset"),
                         ("is_archived",True),("is_default",False)):
         changed=root/f"preset-{field}.starry"
