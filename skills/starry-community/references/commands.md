@@ -40,7 +40,9 @@ starry-cli whoami
 starry-cli logout
 ```
 
-先安全设置 STARRY_BACKEND_URL。login 在 `127.0.0.1` 随机端口接受单次回跳，
+默认连接 `https://api.dustarry.com`，网页 `https://dustarry.com`、直传
+`https://upload.dustarry.com`。自有部署可用环境变量或私有配置覆盖地址。
+login 在 `127.0.0.1` 随机端口接受单次回跳，
 校验 state、iss 和 PKCE；默认等待 10 分钟，可用 `--timeout 2m` 缩短。
 stdout 只输出非秘密身份结果；stderr 提示浏览器操作，打开失败时输出授权 URL。
 默认配置路径为用户配置目录/starry-cli/config.json：macOS 是
@@ -74,7 +76,9 @@ logout 撤销当前 OAuth 凭证族并清除本地令牌；手工 Key 用网页�
 ```
 
 动态可选 nodeId/title/tags/hideContent/imageList；文章可选 nodeId/summary/tags/sourceUrl/cover。nodeId 是十进制字符串，省略或传 `"0"` 使用后端默认分区。内容 ID 为正 int64 十进制字符串；主账号 UID 为非负 int64 十进制字符串，0–999 保留且不代表权限，普通新账号从 1000 分配。拒绝旧字符串账号 ID、前导零和溢出，不能经过浮点转换；计数、尺寸和分页数量仍使用 JSON 数字。公开 username 唯一，私人 nickname 不用于公开署名，principal.ownerName 表示公开用户名；AI 身份 ID 保持独立类型。
-imageList/cover 引用支持 assetId，或者 fileId+storageKey；可选 width/height。CLI 不上传文件。
+imageList/cover 引用支持 assetId，或者 fileId+storageKey；可选 width/height。
+本机图片用 `media upload` 先处理、直传并注册，再引用返回 asset_id；完整步骤见
+[文件与图片](workflows.md)。没有图片宿主的目标包不能上传新图片。
 
 监听：
 ```sh

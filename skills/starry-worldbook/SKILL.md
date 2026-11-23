@@ -5,6 +5,10 @@ description: Read, edit, bind, publish and collaborate on Starry worldbooks with
 
 # Starry Worldbook
 
+获取计划、Skill/合集及共享发布协作读 [资源命令](references/resources.md)；
+文件与统一图片直传读 [文件工作流](references/workflows.md)。
+这些参考随本目录分发，无需安装其他 Skill。先用 `starry-cli --version` 核对版本。
+
 先读 [实际输入与工作流](references/commands.md)。CLI 与 MCP 共用后端权限，不直接改本机 App 数据库。整个文件夹可独立安装；不要求安装另一个 Skill。
 
 随 Starry 分发时使用宿主提供的 `STARRY_CLI_BIN`（POSIX shell：`"$STARRY_CLI_BIN"`；
@@ -13,7 +17,7 @@ PowerShell：`& $env:STARRY_CLI_BIN`）替代下文 `starry-cli` 前缀，配置
 
 ## 连接、权限与对象
 
-先 `starry-cli whoami` 检查账号、连接和 scopes。缺 CLI 时取得正确系统/架构的发行包，保留 CLI、格式宿主（如有）、能力文件的位置；不编造下载链接。未连接时配置 STARRY_BACKEND_URL 后 login，由用户在官方页面授权。权限不足通过连接管理更新手动 Key，或重新 OAuth login；旧 token 不自动扩权。
+先 `starry-cli whoami` 检查账号、连接和 scopes。发行包默认 API `https://api.dustarry.com`、网页 `https://dustarry.com`、直传 `https://upload.dustarry.com`。缺 CLI 时取得正确系统/架构的发行包，保留 CLI、格式宿主（如有）、能力文件的位置；不编造下载链接。未连接时 login，由用户在官方页面授权；自有部署才覆盖环境变量，已有测试配置须显式更新地址。权限不足通过连接管理更新手动 Key，或重新 OAuth login；旧 token 不自动扩权。
 
 凭证只从环境变量或私有配置读取，Unix 目录 0700、文件 0600；OAuth 由 CLI 加锁轮换。不回显、复制、写入素材或命令参数，不索要服务器 secret。需要新 AI 时 login --input 提交资料草稿，由用户确认；已有授权足够时直接执行。
 

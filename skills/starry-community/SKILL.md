@@ -11,14 +11,16 @@ CLI 与 MCP 共用 `starry-cli/pkg/community`；不需要启动 MCP。
 随 Starry 分发时使用宿主提供的 `STARRY_CLI_BIN`（POSIX shell：`"$STARRY_CLI_BIN"`；
 PowerShell：`& $env:STARRY_CLI_BIN`）替代下文 `starry-cli` 前缀，配置由
 `STARRY_CLI_CONFIG` 指定。独立安装沿用 PATH 入口，无需 Go SDK。
-发行包另含可独立安装的 `starry-character` 和 `starry-worldbook`，共用 CLI 与凭证；
+发行包另含可独立安装的 `starry-character`、`starry-worldbook` 与 `starry-assets`，共用 CLI 与凭证；
 角色卡/世界书操作及资源通知使用相应 Skill，不通过社区评论或通知接口代替。
+版本核对用 `starry-cli --version`。图片附件、文件、获取/更新及资源协作分别读
+[文件与图片工作流](references/workflows.md) 和 [资源命令](references/resources.md)。
 
 ## 连接
 使用已安装并加入 PATH 的 `starry-cli`（Windows 为 `starry-cli.exe`）。
 未安装时使用与系统和架构匹配的官方发行包，解压后将可执行文件加入 PATH，并把包内 `starry-community` 整个文件夹安装到宿主的 skills 目录。发行包尚未公开时，告知用户需要获取该包；不要编造下载地址。
 自行编译只需 `starry-cli` 仓库和 Go 1.25，在仓库内执行 `go build -o <用户可执行目录>/starry-cli ./cmd/starry-cli`；不需要 MCP 或 Starry 主应用源码。
-先运行 `starry-cli whoami` 核实当前授权。尚未连接时，安全配置 `STARRY_BACKEND_URL`，运行 `starry-cli login`，让用户在浏览器登录、检查权限并批准。浏览器打开失败时给用户 CLI 输出的授权 URL；不要代替用户勾选或批准。登录最多等待 10 分钟。
+先运行 `starry-cli whoami` 核实当前授权。发行包默认 API `https://api.dustarry.com`、网页 `https://dustarry.com`、直传 `https://upload.dustarry.com`。尚未连接时运行 `starry-cli login`，让用户在浏览器登录、检查权限并批准；自有部署才覆盖环境变量，已有测试配置须显式更新地址。浏览器打开失败时给用户 CLI 输出的授权 URL；不要代替用户勾选或批准。登录最多等待 10 分钟。
 默认凭证位于用户配置目录的 `starry-cli/config.json`；自选位置用 `STARRY_CLI_CONFIG` 或 `--config`，Unix 要求父目录 0700、文件 0600。CLI 自动加锁轮换 `stro_` 刷新令牌并原子回写；不手改、复制或回显秘密。退出用 `starry-cli logout`，会撤销该凭证族。
 网页手工 `stai_` Key 仍可从 `STARRY_API_KEY` 或私有 JSON 读取，适合无浏览器环境或自定义请求头客户端；该入口不自动轮换。浏览器 login 前解除 `STARRY_API_KEY` 环境覆盖。
 不索要服务端 exchange secret，不把凭证写进参数、提示词、日志、版本库或发帖内容。缺少后端地址时只说明缺少的配置，不回显已有凭证。

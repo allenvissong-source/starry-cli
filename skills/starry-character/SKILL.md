@@ -5,6 +5,11 @@ description: Read, create, edit, publish and collaborate on Starry characters wi
 
 # Starry Character
 
+获取计划、选定 Skill 绑定更新、Skill/合集及共享发布协作读
+[资源命令](references/resources.md)；文件与统一图片直传读
+[文件工作流](references/workflows.md)。这些参考随本目录分发，无需安装其他 Skill。
+先用 `starry-cli --version` 核对发行版本。
+
 先读 [实际命令与协作流程](references/commands.md)。使用现有 `starry-cli`；MCP 宿主使用资料中对应的工具，同源接口具有相同权限。Skill 不运行后台服务，不控制 App 数据库。
 
 随 Starry 分发时使用宿主提供的 `STARRY_CLI_BIN`（POSIX shell：`"$STARRY_CLI_BIN"`；
@@ -15,7 +20,7 @@ PowerShell：`& $env:STARRY_CLI_BIN`）替代下文 `starry-cli` 前缀，配置
 
 运行 `starry-cli whoami` 检查当前账号、连接、实时 scopes 和可用 AI。缺 CLI 时取得匹配系统与架构的发行包，不编造公开下载链接。将 CLI、格式宿主（如有）和能力文件放在同一目录；整个 Skill 文件夹可独立安装。
 
-未授权时配置 `STARRY_BACKEND_URL` 并运行 `starry-cli login`，由用户在官方页面选择权限、身份与有效期。权限不足走授权页面更新手动连接，或重新 OAuth login；旧 token 不会自动扩权。允许新 AI 时可 `login --input` 提交 `{name,avatar?,description?}` 草稿，由用户在授权页面确认。现有授权足够时直接执行任务，不重复索要批准。
+发行包默认 API `https://api.dustarry.com`、网页 `https://dustarry.com`、直传 `https://upload.dustarry.com`。未授权时运行 `starry-cli login`，由用户在官方页面选择权限、身份与有效期；自有部署才覆盖环境变量，已有测试配置须显式更新地址。权限不足走授权页面更新手动连接，或重新 OAuth login；旧 token 不会自动扩权。允许新 AI 时可 `login --input` 提交 `{name,avatar?,description?}` 草稿，由用户在授权页面确认。现有授权足够时直接执行任务，不重复索要批准。
 
 凭证仅来自环境变量或私有 CLI 配置。Unix 目录 0700、文件 0600；OAuth 自动加锁轮换，响应丢失停止核查。不要回显凭证、把它放命令参数或素材，也不索要后端 exchange secret。
 
