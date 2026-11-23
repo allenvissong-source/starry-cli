@@ -14,16 +14,17 @@ Starry 随包环境通过 `STARRY_CLI_BIN` 提供经过平台、架构和内容�
 `starry-cli` 替换为该入口（POSIX shell 为 `"$STARRY_CLI_BIN"`，PowerShell
 为 `& $env:STARRY_CLI_BIN`），无需 Go SDK 或把程序加入 PATH。格式宿主与能力文件
 随组件安装；技能声明本身不授予账号、发布或后台监听权限。
-2. 按需要把 `starry-community`、`starry-character`、`starry-worldbook` 整个文件夹复制到助手客户端的 skills 目录，保留各自的 references；三者可独立安装并共用 CLI 和凭证。
-3. 运行 `starry-cli --help` 确认 CLI 可用。
+2. 按需要把 `starry-community`、`starry-character`、`starry-worldbook`、`starry-assets` 整个文件夹复制到助手客户端的 skills 目录，保留各自的 references；四者可独立安装并共用 CLI 和凭证。独立 Skills ZIP 提供相同目录内容。
+3. 运行 `starry-cli --version` 核对包内 release-manifest.json，再运行 `--help` 确认 CLI 可用。
 
 包中无需其他源码或 Go。CLI 直接连接后端，Skill 不需要配置 MCP 服务。
-文件转换仅在附带格式宿主的目标包启用；macOS ARM64 已验证，其他目标等待
+文件转换和图片规范化上传仅在附带格式宿主的目标包启用；macOS ARM64 已验证，其他目标等待
 原生宿主验证。详情见包内 `FILES.md`。
 
 ## 连接配置
 
-通过环境变量安全设置 `STARRY_BACKEND_URL`，运行 `starry-cli login`，在浏览器
+发行包默认连接正式 API `https://api.dustarry.com`，网页 `https://dustarry.com`，
+图片直传 `https://upload.dustarry.com`。直接运行 `starry-cli login`，在浏览器
 登录并批准需要的权限。无法自动打开时，手动打开 CLI 显示的授权 URL。
 默认等待 10 分钟；loopback 回跳仅监听本机随机端口，使用 PKCE、state 和 issuer
 校验。读与维护默认勾选，写权限需主动选择。需要新身份时使用
@@ -39,14 +40,23 @@ macOS 位于 `~/Library/Application Support`，Linux 位于 XDG_CONFIG_HOME 或
 CLI 自动加锁续期和回写；不要复制 OAuth 配置并发使用。
 
 无浏览器环境也可使用网页生成的手工 `stai_` Key：
-通过环境变量安全设置 `STARRY_BACKEND_URL` 与用户自己的 `STARRY_API_KEY`。
-可选 `STARRY_PUBLIC_WEB_URL` 用于生成内容链接。后端地址应为 HTTPS origin；
+通过环境变量安全设置用户自己的 `STARRY_API_KEY` 即可连接正式 API。
+自有部署可设置 `STARRY_BACKEND_URL`、`STARRY_PUBLIC_WEB_URL` 和
+`STARRY_CAS_DIRECT_UPLOAD_ORIGIN`；环境变量优先于私有配置，私有配置优先于默认值。
+已有本地或测试配置保留原地址，使用正式环境时须显式更新地址；不自动转移旧凭证。
+自有部署需指定网页地址才生成内容链接。后端地址应为 HTTPS origin；
 本机开发允许回环 HTTP。
+
+图片直传默认媒体 origin 为 `https://upload.dustarry.com`，依据正式切流配置。
+`r2.dustarry.com` 是网页静态资源镜像，不用于媒体直传。
+自有部署如更换媒体域名，用 `STARRY_CAS_DIRECT_UPLOAD_ORIGIN` 或配置字段
+casDirectUploadOrigin 指定可信 HTTPS origin。CLI 校验 prepare 返回地址必须与它完全匹配，
+只向 `/uploads/<ticket>` 发送无凭证 PUT；不回退到旧 API 字节上传。
 
 也可以用 `STARRY_CLI_CONFIG` 指向一个 JSON 配置文件：
 
 ```json
-{"backendUrl":"https://你的后端域名","apiKey":"用户自己的凭证","publicWebUrl":"https://你的站点"}
+{"backendUrl":"https://api.dustarry.com","apiKey":"用户自己的凭证","publicWebUrl":"https://dustarry.com","casDirectUploadOrigin":"https://upload.dustarry.com"}
 ```
 
 macOS/Linux 配置文件权限须为 0600。不要把真实凭证放在命令参数、shell 历史、

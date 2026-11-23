@@ -31,7 +31,7 @@ var commands = map[string]string{
 
 const help = `Starry CLI — 直接连接后端，无需 MCP 服务
 用法: starry-cli COMMAND [--input FILE|-] [--config FILE]
-命令: login logout whoami identity [list|create|update]
+命令: --version login logout whoami identity [list|create|update]
       list search topics post comments stats notifications inbox
       create-dynamic create-article create-comment operation
       asset search|get|package|revisions|lineage|diff
@@ -151,6 +151,12 @@ func configureEndpoints(cfg *config) {
 }
 
 func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	if len(args) == 1 && (args[0] == "--version" || args[0] == "version") {
+		if err := json.NewEncoder(stdout).Encode(map[string]any{"data": versionInfo()}); err != nil {
+			return report(stderr, errors.New("cannot write version"))
+		}
+		return 0
+	}
 	if len(args) == 0 || args[0] == "--help" || args[0] == "help" || args[0] == "-h" {
 		fmt.Fprint(stdout, help)
 		return 0

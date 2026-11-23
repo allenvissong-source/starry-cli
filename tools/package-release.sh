@@ -20,7 +20,7 @@ for existing in "$output_dir"/* "$output_dir"/.[!.]* "$output_dir"/..?*; do
     exit 1
   fi
 done
-for required in go tar shasum; do
+for required in go tar shasum python3; do
   command -v "$required" >/dev/null 2>&1 || {
     echo "Required build command is missing: $required" >&2
     exit 1
@@ -35,6 +35,9 @@ trap 'exit 1' HUP INT TERM
 native_os=$(go env GOHOSTOS)
 native_arch=$(go env GOHOSTARCH)
 native_host="$staging_dir/starry-format-host"
+python3 "$repo_dir/tools/sync-skill-references.py" --check
+python3 "$repo_dir/tools/release-manifest.py" "$staging_dir/release-manifest.json"
+build_flags=$(python3 -c 'import json,sys; m=json.load(open(sys.argv[1])); v={"Version":m["version"],"ReleaseID":m["releaseId"],"SourceCommit":m["source"]["baseCommit"],"SourceDigest":m["source"]["sourceDigest"],"SourceDirty":str(m["source"]["dirty"]).lower(),"BuildTime":m["builtAt"]}; print("-s -w "+" ".join("-X starry-cli/internal/cli."+k+"="+v for k,v in v.items()))' "$staging_dir/release-manifest.json")
 if command -v dart >/dev/null 2>&1; then
   sh "$repo_dir/tools/build-format-host.sh" "$native_host"
 fi
@@ -48,7 +51,7 @@ for target_os in darwin linux windows; do
     if [ "$target_os" = windows ]; then binary=starry-cli.exe; fi
     CGO_ENABLED=0 GOOS="$target_os" GOARCH="$target_arch" GOWORK=off \
       GOPROXY=off GOTOOLCHAIN=local go -C "$repo_dir" build -trimpath \
-      -ldflags="-s -w" -o "$package_dir/$binary" ./cmd/starry-cli
+      -ldflags="$build_flags" -o "$package_dir/$binary" ./cmd/starry-cli
     host_name=starry-format-host
     if [ "$target_os" = windows ]; then host_name=starry-format-host.exe; fi
     host=""
@@ -61,21 +64,25 @@ for target_os in darwin linux windows; do
     if [ -n "$host" ]; then
       cp "$host" "$package_dir/$host_name"
       chmod 755 "$package_dir/$host_name"
-      printf '{"fileImportExport":true,"host":"%s"}\n' "$host_name" > "$package_dir/file-capabilities.json"
+      printf '{"fileImportExport":true,"imagePreparation":true,"mediaUpload":true,"mediaDownload":true,"host":"%s"}\n' "$host_name" > "$package_dir/file-capabilities.json"
     else
-      printf '{"fileImportExport":false,"reason":"format_host_not_built_for_target"}\n' > "$package_dir/file-capabilities.json"
+      printf '{"fileImportExport":false,"imagePreparation":false,"mediaUpload":false,"mediaDownload":true,"reason":"format_host_not_built_for_target"}\n' > "$package_dir/file-capabilities.json"
     fi
-    for skill in starry-community starry-character starry-worldbook; do
+    for skill in starry-community starry-character starry-worldbook starry-assets; do
       cp -R "$repo_dir/skills/$skill" "$package_dir/$skill"
     done
     find "$package_dir" -type f \( -name '.DS_Store' -o -name '._*' \) -delete
     cp "$repo_dir/INSTALL.md" "$package_dir/README.md"
     cp "$repo_dir/FILES.md" "$package_dir/FILES.md"
+    cp "$staging_dir/release-manifest.json" "$package_dir/release-manifest.json"
     COPYFILE_DISABLE=1 tar -czf "$staging_dir/$name.tar.gz" -C "$staging_dir" "$name"
     checksum=$(shasum -a 256 "$staging_dir/$name.tar.gz")
     printf '%s  %s.tar.gz\n' "${checksum%% *}" "$name" >> "$staging_dir/SHA256SUMS"
     echo "Built $name"
   done
 done
-cp "$staging_dir"/*.tar.gz "$staging_dir/SHA256SUMS" "$output_dir/"
+python3 "$repo_dir/tools/package-skills.py" "$staging_dir/starry-skills-v1.zip"
+checksum=$(shasum -a 256 "$staging_dir/starry-skills-v1.zip")
+printf '%s  starry-skills-v1.zip\n' "${checksum%% *}" >> "$staging_dir/SHA256SUMS"
+cp "$staging_dir"/*.tar.gz "$staging_dir/starry-skills-v1.zip" "$staging_dir/release-manifest.json" "$staging_dir/SHA256SUMS" "$output_dir/"
 echo "Packages written to $output_dir"
