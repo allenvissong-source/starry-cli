@@ -30,6 +30,8 @@ type MediaInput struct {
 	MediaType  string `json:"mediaType" jsonschema:"image/png, image/jpeg, image/gif or image/webp"`
 	ByteSize   int64  `json:"byteSize" jsonschema:"1-134217728; backend storage size is authoritative"`
 	RequestKey string `json:"requestKey" jsonschema:"Stable CAS registration mutation ID; preserve on uncertain outcome"`
+	Ticket     string `json:"ticket,omitempty" jsonschema:"Direct upload ticket from prepare; finalize with matching receipt"`
+	Receipt    string `json:"receipt,omitempty" jsonschema:"Verified edge receipt; required with ticket"`
 }
 
 func validMedia(in MediaInput) bool {
@@ -48,6 +50,9 @@ func Media(ctx context.Context, client *transport.Client, token, name string, ra
 		return transport.ReadingResult(client.Request(ctx, "GET", "/api/v1/authoring/cas/assets?"+url.Values{
 			"requestKey": {in.RequestKey}, "sha256": {in.SHA256}}.Encode(), token, nil))
 	case "assets_prepare_upload":
+		if in.Ticket != "" || in.Receipt != "" {
+			return nil, errors.New("prepare does not accept upload receipts")
+		}
 		response, err := client.Do(ctx, "GET", "/api/v1/authoring/cas/blobs/"+in.SHA256, token, "", nil)
 		present := err == nil
 		var api *transport.APIError
@@ -63,13 +68,54 @@ func Media(ctx context.Context, client *transport.Client, token, name string, ra
 				return nil, errors.New("stored media size or digest mismatch")
 			}
 		}
-		return map[string]any{"data": map[string]any{"present": present, "sha256": in.SHA256,
-			"byteSize": in.ByteSize, "method": "PUT", "uploadPath": "/api/v1/authoring/cas/blobs/" + in.SHA256}}, nil
+		data := map[string]any{"present": present, "sha256": in.SHA256, "byteSize": in.ByteSize}
+		if !present {
+			prepared, err := client.Do(ctx, "POST", "/api/v1/authoring/cas/blobs/"+in.SHA256+"/prepare", token, "",
+				map[string]any{"byte_size": in.ByteSize, "media_type": in.MediaType})
+			if err != nil {
+				return nil, err
+			}
+			var plan struct {
+				URL    string `json:"upload_url"`
+				Method string `json:"method"`
+				Ticket string `json:"ticket"`
+			}
+			if json.Unmarshal(prepared.Data, &plan) != nil || plan.Method != "PUT" || !validDirectPlan(client, plan.URL, plan.Ticket) {
+				return nil, errors.New("invalid direct upload plan")
+			}
+			data["uploadUrl"], data["method"], data["ticket"] = plan.URL, plan.Method, plan.Ticket
+		}
+		return map[string]any{"data": data}, nil
 	case "assets_finalize_upload":
+		if (in.Ticket == "") != (in.Receipt == "") || len(in.Ticket) > 4096 || len(in.Receipt) > 4096 {
+			return nil, errors.New("invalid direct upload receipt")
+		}
+		if in.Ticket != "" {
+			completed, err := client.Do(ctx, "POST", "/api/v1/authoring/cas/blobs/"+in.SHA256+"/complete", token, "",
+				map[string]any{"ticket": in.Ticket, "receipt": in.Receipt})
+			if err != nil {
+				return nil, err
+			}
+			var blob struct {
+				SHA256 string `json:"sha256"`
+				Size   int64  `json:"byte_size"`
+			}
+			if json.Unmarshal(completed.Data, &blob) != nil || blob.SHA256 != in.SHA256 || blob.Size != in.ByteSize {
+				return nil, errors.New("completed upload does not match media")
+			}
+		}
 		result, err := transport.WriteResult(client.Do(ctx, "POST", "/api/v1/authoring/cas/assets", token, in.RequestKey,
 			map[string]any{"sha256": in.SHA256, "media_type": in.MediaType,
 				"byte_size": in.ByteSize, "client_mutation_id": in.RequestKey}))
 		if err != nil {
+			var api *transport.APIError
+			if errors.As(err, &api) && api.Code == "outcome_unknown" {
+				recovery, _ := json.Marshal(map[string]any{"sha256": in.SHA256, "mediaType": in.MediaType,
+					"byteSize": in.ByteSize, "requestKey": in.RequestKey})
+				copyError := *api
+				copyError.Message = "Query media operation with " + string(recovery)
+				return nil, &copyError
+			}
 			return nil, err
 		}
 		data, ok := result["data"].(map[string]any)
@@ -81,6 +127,13 @@ func Media(ctx context.Context, client *transport.Client, token, name string, ra
 	default:
 		return nil, errors.New("unknown media operation")
 	}
+}
+
+func validDirectPlan(client *transport.Client, href, ticket string) bool {
+	u, err := url.Parse(href)
+	return err == nil && u.User == nil && u.RawQuery == "" && !u.ForceQuery && u.Fragment == "" &&
+		u.Scheme+"://"+u.Host == client.CASDirectUploadOrigin() && u.RawPath == "" &&
+		ticket != "" && len(ticket) <= 4096 && !strings.ContainsAny(ticket, "/\\\r\n") && u.Path == "/uploads/"+ticket
 }
 
 type DownloadInput struct {
@@ -212,18 +265,23 @@ func UploadFile(ctx context.Context, client *transport.Client, token, path, key 
 		if _, err := f.Seek(0, io.SeekStart); err != nil {
 			return nil, err
 		}
-		response, err := client.UploadRaw(ctx, "/api/v1/authoring/cas/blobs/"+in.SHA256, token, in.MediaType, size, f)
+		plan := prepared["data"].(map[string]any)
+		in.Ticket = plan["ticket"].(string)
+		response, err := client.UploadDirect(ctx, plan["uploadUrl"].(string), in.Ticket, in.MediaType, size, f)
 		if err != nil {
 			return nil, err
 		}
 		var uploaded struct {
-			SHA256 string `json:"sha256"`
-			Size   int64  `json:"byte_size"`
+			SHA256  string `json:"sha256"`
+			Size    int64  `json:"byte_size"`
+			Receipt string `json:"receipt"`
 		}
 		if (response.Status != 200 && response.Status != 201) || json.Unmarshal(response.Data, &uploaded) != nil ||
-			uploaded.SHA256 != in.SHA256 || uploaded.Size != size {
+			uploaded.SHA256 != in.SHA256 || uploaded.Size != size || uploaded.Receipt == "" || len(uploaded.Receipt) > 4096 {
 			return nil, errors.New("upload response does not match media")
 		}
+		in.Receipt = uploaded.Receipt
+		raw, _ = json.Marshal(in)
 	}
 	return Media(ctx, client, token, "assets_finalize_upload", raw)
 }

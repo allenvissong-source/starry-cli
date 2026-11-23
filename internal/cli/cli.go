@@ -16,6 +16,7 @@ import (
 	"starry-cli/pkg/assets"
 	"starry-cli/pkg/catalog"
 	"starry-cli/pkg/community"
+	"starry-cli/pkg/transport"
 )
 
 var commands = map[string]string{
@@ -43,14 +44,15 @@ const help = `Starry CLI — 直接连接后端，无需 MCP 服务
       collection list|get|create|update|delete; collection items list|apply
       asset operation
       asset preview|publish|policy
-      asset acquire-plan|acquire|fork|stats|notifications|inbox
+      asset acquire-plan|acquire|update-source|fork|stats|notifications|inbox
       asset suggestions list|get|create|withdraw|reject|adopt
       asset comments list|create
       media upload|download|operation
       character import|export; worldbook import|export; skill import|export; collection import|export
       watch [--domain community|assets] [--cursor-file FILE] [--once] [--timeout DURATION] [--dispatch]
       watch-state --state-file FILE [--input FILE|-]
-配置: STARRY_BACKEND_URL, STARRY_API_KEY, STARRY_PUBLIC_WEB_URL
+生产默认: API https://api.dustarry.com；网页 https://dustarry.com；直传 https://upload.dustarry.com
+配置: STARRY_BACKEND_URL, STARRY_API_KEY, STARRY_PUBLIC_WEB_URL, STARRY_CAS_DIRECT_UPLOAD_ORIGIN
       或 STARRY_CLI_CONFIG 指向 0600 JSON 配置；默认用户配置目录/starry-cli/config.json
 输入: 一个 JSON 对象，最多 64 KiB；Skill 与绑定写入最多 4 MiB；省略 --input 时使用 {}
 login --input FILE|-: 提前提交 {name, avatar?, description?} AI 草稿，在授权页确认与编辑
@@ -59,15 +61,16 @@ login --input FILE|-: 提前提交 {name, avatar?, description?} AI 草稿，在
 `
 
 type config struct {
-	BackendURL       string         `json:"backendUrl"`
-	APIKey           string         `json:"apiKey"`
-	PublicWebURL     string         `json:"publicWebUrl"`
-	Handler          *handlerConfig `json:"handler,omitempty"`
-	OAuthIssuer      string         `json:"oauthIssuer,omitempty"`
-	Resource         string         `json:"resource,omitempty"`
-	AccessToken      string         `json:"accessToken,omitempty"`
-	AccessExpiry     time.Time      `json:"accessExpiresAt,omitempty"`
-	RefreshUncertain bool           `json:"refreshUncertain,omitempty"`
+	BackendURL            string         `json:"backendUrl"`
+	APIKey                string         `json:"apiKey"`
+	PublicWebURL          string         `json:"publicWebUrl"`
+	CASDirectUploadOrigin string         `json:"casDirectUploadOrigin,omitempty"`
+	Handler               *handlerConfig `json:"handler,omitempty"`
+	OAuthIssuer           string         `json:"oauthIssuer,omitempty"`
+	Resource              string         `json:"resource,omitempty"`
+	AccessToken           string         `json:"accessToken,omitempty"`
+	AccessExpiry          time.Time      `json:"accessExpiresAt,omitempty"`
+	RefreshUncertain      bool           `json:"refreshUncertain,omitempty"`
 }
 
 func readBounded(reader io.Reader, max int64) ([]byte, error) {
@@ -113,14 +116,9 @@ func loadConfig(path string) (config, error) {
 	if err != nil {
 		return cfg, err
 	}
-	if value := os.Getenv("STARRY_BACKEND_URL"); value != "" {
-		cfg.BackendURL = value
-	}
+	configureEndpoints(&cfg)
 	if value := os.Getenv("STARRY_API_KEY"); value != "" {
 		cfg.APIKey = value
-	}
-	if value := os.Getenv("STARRY_PUBLIC_WEB_URL"); value != "" {
-		cfg.PublicWebURL = value
 	}
 	if !validCredential(cfg.APIKey) {
 		return cfg, errors.New("run login or set a manual credential in private config")
@@ -129,6 +127,27 @@ func loadConfig(path string) (config, error) {
 		return cfg, errors.New("OAuth refresh requires a writable private config; unset STARRY_API_KEY")
 	}
 	return cfg, nil
+}
+
+func configureEndpoints(cfg *config) {
+	for key, field := range map[string]*string{
+		"STARRY_BACKEND_URL":              &cfg.BackendURL,
+		"STARRY_PUBLIC_WEB_URL":           &cfg.PublicWebURL,
+		"STARRY_CAS_DIRECT_UPLOAD_ORIGIN": &cfg.CASDirectUploadOrigin,
+	} {
+		if value := os.Getenv(key); value != "" {
+			*field = value
+		}
+	}
+	if cfg.BackendURL == "" {
+		cfg.BackendURL = transport.ProductionBackendURL
+	}
+	if cfg.PublicWebURL == "" && strings.TrimRight(cfg.BackendURL, "/") == transport.ProductionBackendURL {
+		cfg.PublicWebURL = transport.ProductionPublicWebURL
+	}
+	if cfg.CASDirectUploadOrigin == "" {
+		cfg.CASDirectUploadOrigin = transport.ProductionCASDirectUploadOrigin
+	}
 }
 
 func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) int {
@@ -285,7 +304,7 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	if err != nil {
 		return report(stderr, err)
 	}
-	client, err := community.NewClient(community.Config{BackendURL: cfg.BackendURL, PublicWebURL: cfg.PublicWebURL})
+	client, err := community.NewClient(community.Config{BackendURL: cfg.BackendURL, PublicWebURL: cfg.PublicWebURL, CASDirectUploadOrigin: cfg.CASDirectUploadOrigin})
 	if err != nil {
 		return report(stderr, err)
 	}
@@ -369,9 +388,10 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 		var input struct {
 			File       string `json:"file"`
 			RequestKey string `json:"requestKey"`
+			Purpose    string `json:"purpose,omitempty"`
 		}
 		if err = community.DecodeInput(raw, &input); err == nil {
-			out, err = assets.UploadFile(requestCtx, client.Client, auth.Token, input.File, input.RequestKey)
+			out, err = uploadImageFile(requestCtx, client.Client, auth.Token, input.File, input.RequestKey, input.Purpose)
 		}
 	case "local_media_download":
 		var input assets.DownloadInput

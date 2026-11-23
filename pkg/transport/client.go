@@ -12,20 +12,27 @@ import (
 	"time"
 )
 
+const ProductionBackendURL = "https://api.dustarry.com"
+const ProductionPublicWebURL = "https://dustarry.com"
+const ProductionCASDirectUploadOrigin = "https://upload.dustarry.com"
+
 type Config struct {
-	BackendURL   string
-	HTTPClient   *http.Client
-	PublicWebURL string
+	BackendURL            string
+	HTTPClient            *http.Client
+	PublicWebURL          string
+	CASDirectUploadOrigin string
 }
 type Client struct {
-	base      string
-	client    *http.Client
-	publicWeb string
+	base         string
+	client       *http.Client
+	publicWeb    string
+	directOrigin string
 }
 
-func (b *Client) BackendURL() string       { return b.base }
-func (b *Client) HTTPClient() *http.Client { return b.client }
-func (b *Client) PublicWebURL() string     { return b.publicWeb }
+func (b *Client) BackendURL() string            { return b.base }
+func (b *Client) HTTPClient() *http.Client      { return b.client }
+func (b *Client) PublicWebURL() string          { return b.publicWeb }
+func (b *Client) CASDirectUploadOrigin() string { return b.directOrigin }
 
 type Response struct {
 	Data   json.RawMessage
@@ -51,6 +58,15 @@ func retryableStatus(status int) bool {
 }
 
 func NewClient(cfg Config) (*Client, error) {
+	if cfg.CASDirectUploadOrigin == "" {
+		cfg.CASDirectUploadOrigin = ProductionCASDirectUploadOrigin
+	}
+	direct, err := url.Parse(cfg.CASDirectUploadOrigin)
+	if err != nil || direct.Host == "" || direct.User != nil || direct.RawQuery != "" || direct.Fragment != "" ||
+		(direct.Path != "" && direct.Path != "/") || (direct.Scheme != "https" &&
+		!(direct.Scheme == "http" && (direct.Hostname() == "127.0.0.1" || direct.Hostname() == "localhost" || direct.Hostname() == "::1"))) {
+		return nil, errors.New("CAS direct upload origin must be HTTPS or loopback HTTP")
+	}
 	u, err := url.Parse(cfg.BackendURL)
 	if err != nil || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" ||
 		(u.Path != "" && u.Path != "/") || (u.Scheme != "https" && !(u.Scheme == "http" && (u.Hostname() == "127.0.0.1" || u.Hostname() == "localhost" || u.Hostname() == "::1"))) {
@@ -69,7 +85,33 @@ func NewClient(cfg Config) (*Client, error) {
 	}
 	copyClient := *client
 	copyClient.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
-	return &Client{base: strings.TrimRight(cfg.BackendURL, "/"), client: &copyClient, publicWeb: strings.TrimRight(cfg.PublicWebURL, "/")}, nil
+	return &Client{base: strings.TrimRight(cfg.BackendURL, "/"), client: &copyClient, publicWeb: strings.TrimRight(cfg.PublicWebURL, "/"),
+		directOrigin: strings.TrimRight(cfg.CASDirectUploadOrigin, "/")}, nil
+}
+
+// UploadDirect sends bytes only to the configured CAS edge. Bearer credentials,
+// cookies and redirects are excluded from this independent byte transport.
+func (b *Client) UploadDirect(ctx context.Context, href, ticket, mediaType string, size int64, body io.Reader) (Response, error) {
+	u, err := url.Parse(href)
+	if err != nil || u.User != nil || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" ||
+		u.Scheme+"://"+u.Host != b.directOrigin || u.Path != "/uploads/"+ticket || u.RawPath != "" ||
+		ticket == "" || len(ticket) > 4096 || strings.ContainsAny(ticket, "/\\\r\n") ||
+		size < 1 || size > 128<<20 || strings.ContainsAny(mediaType, "\r\n") {
+		return Response{}, NewAPIError(400, "invalid_direct_upload")
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, href, io.LimitReader(body, size))
+	if err != nil {
+		return Response{}, err
+	}
+	req.GetBody = nil
+	req.ContentLength = size
+	req.Header.Set("Content-Type", mediaType)
+	req.Header.Set("Accept", "application/json")
+	edge := *b.client
+	edge.Jar = nil
+	isolated := *b
+	isolated.client = &edge
+	return isolated.send(req)
 }
 func (b *Client) Request(ctx context.Context, method, path, token string, body any) (json.RawMessage, error) {
 	return b.RequestWithKey(ctx, method, path, token, "", body)
@@ -118,26 +160,6 @@ func (b *Client) Do(ctx context.Context, method, path, token, requestKey string,
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	return b.send(req)
-}
-
-// UploadRaw streams bounded CAS bytes to the configured backend only.
-func (b *Client) UploadRaw(ctx context.Context, path, token, mediaType string, size int64, body io.Reader) (Response, error) {
-	if !strings.HasPrefix(path, "/api/v1/authoring/cas/blobs/") ||
-		len(strings.TrimPrefix(path, "/api/v1/authoring/cas/blobs/")) != 64 ||
-		strings.Trim(strings.TrimPrefix(path, "/api/v1/authoring/cas/blobs/"), "0123456789abcdef") != "" ||
-		size < 1 || size > 128<<20 || strings.ContainsAny(mediaType, "\r\n") {
-		return Response{}, NewAPIError(400, "invalid_upload")
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, b.base+path, io.LimitReader(body, size))
-	if err != nil {
-		return Response{}, err
-	}
-	req.GetBody = nil
-	req.ContentLength = size
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Content-Type", mediaType)
-	req.Header.Set("Accept", "application/json")
 	return b.send(req)
 }
 

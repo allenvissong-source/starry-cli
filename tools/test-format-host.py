@@ -91,10 +91,21 @@ with tempfile.TemporaryDirectory(prefix="starry-format-contract-") as temp:
     assert actual["character"]["description"]==card["description"]
     assert actual["character"]["depth_prompt"]==card["depth_prompt"]
     assert actual["character"]["character_version"]==card["character_version"]
-    assert {m["sha256"] for m in actual["media"]}=={m["sha256"] for m in graph["media"]}
+    expected_media = set()
+    for item, role in zip(graph["media"], ["avatar","cover","illustration","background"]):
+        prepared = root / ("expected-"+role)
+        run("image", role, item["file"], prepared)
+        expected_media.add(hashlib.sha256(prepared.read_bytes()).hexdigest())
+        assert prepared.read_bytes().startswith(b"RIFF") and prepared.read_bytes()[8:12] == b"WEBP"
+        repeated = root / ("repeated-"+role)
+        run("image", role, prepared, repeated)
+        assert prepared.read_bytes() == repeated.read_bytes(), "canonical images must be reused"
+    assert {m["sha256"] for m in actual["media"]} == expected_media
+    assert {r["target_id"] for r in actual["relations"]} == expected_media
+    assert all(hashlib.sha256(Path(m["file"]).read_bytes()).hexdigest() == m["sha256"] for m in actual["media"])
     assert all(e["extensions"]["starry_file_source"]["vectorized"] is True
                for e in actual["worldbooks"][0]["entries"])
-    print("PASS .starry: two books, reference/embedded, four slots, verified image bytes and prompts")
+    print("PASS .starry: two books, four slots, canonical WebP hashes, consistent references and byte reuse")
     run("export","character",graphfile,root/"incomplete.json",False)
     assert not (root/"incomplete.json").exists()
     print("PASS incompatible format rejected without partial output")

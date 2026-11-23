@@ -175,13 +175,9 @@ func runLoginWithBrowser(ctx context.Context, path string, timeout time.Duration
 	} else if !os.IsNotExist(err) {
 		return report(stderr, errors.New("cannot read credential config"))
 	}
-	if value := os.Getenv("STARRY_BACKEND_URL"); value != "" {
-		cfg.BackendURL = value
-	}
-	if value := os.Getenv("STARRY_PUBLIC_WEB_URL"); value != "" {
-		cfg.PublicWebURL = value
-	}
-	client, err := community.NewClient(community.Config{BackendURL: cfg.BackendURL, PublicWebURL: cfg.PublicWebURL})
+	configureEndpoints(&cfg)
+	client, err := community.NewClient(community.Config{BackendURL: cfg.BackendURL, PublicWebURL: cfg.PublicWebURL,
+		CASDirectUploadOrigin: cfg.CASDirectUploadOrigin})
 	if err != nil {
 		return report(stderr, err)
 	}

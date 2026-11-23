@@ -30,7 +30,8 @@ embedded 绑定；空条目不会被当作未附带世界书。
 
 只有带 `file-capabilities.json` 中 `fileImportExport:true` 及格式宿主的包
 支持文件转换。本机 macOS ARM64 已实际构建并验证；其余五个目标只交付 Go
-CLI，等待各平台构建并验证宿主。下载、媒体上传、结构化草稿编辑与读取不依赖
+CLI，等待各平台构建并验证宿主。图片规范化上传也需要该宿主；
+`imagePreparation` 与 `mediaUpload` 在能力清单明确标识。下载、结构化草稿编辑与读取不依赖
 格式宿主。用户不需 Go、Dart、Flutter SDK 或后端源码。
 
 维护者用已解析的 Starry 主应用 package_config 构建原生宿主，
@@ -128,19 +129,31 @@ starry-cli collection export --input collection-export.json
 ## 媒体
 
 ```json
-{"file":"/用户指定/avatar.png","requestKey":"stable-media-intent"}
+{"file":"/用户指定/avatar.png","requestKey":"stable-media-intent","purpose":"avatar"}
 ```
 
-`media upload` 支持 PNG/JPEG/GIF/WebP，单文件最多 128 MiB，返回本人私有
+`media upload` 支持 PNG/JPEG/GIF/WebP，原图最多 100 MiB，返回本人私有
 媒体 UUID。内容 hash、媒体 UUID、正式 fileRefId 不可混用。注册未知时查询：
 
 ```json
-{"sha256":"原SHA256","mediaType":"image/png","byteSize":12345,"requestKey":"原媒体key"}
+{"sha256":"规范化后SHA256","mediaType":"image/webp","byteSize":12345,"requestKey":"原媒体key"}
 ```
 
 `media operation` 只读取同一连接的原注册结果。MCP 对应
 `assets_prepare_upload`、`assets_finalize_upload`、`assets_get_upload`。
-宿主向 prepare 返回的相对 PUT 路径上传字节；工具不提供任意 URL 抓取器。
+本机 CLI 复用 App 的 ImageMediaIntake 与同版编码器，先规范化再计算 SHA256；
+purpose=avatar|cover|background|content|illustration，默认 content。静态图转 WebP，
+动画按统一编解码规则保留帧、透明度与时序；合规且带当前标记的图复用字节。
+导入按实际槽位中的最大用途处理共享图片，同时更新图引用和进度摘要，
+后续注册/恢复始终用规范化后摘要。发布与同步复用已入库字节。
+
+直传顺序为：查已存在 blob → POST prepare → 无凭证 PUT 到配置媒体 origin 的
+`/uploads/<ticket>` → 核对摘要/大小/receipt → POST complete → 注册资产。
+正式直传 origin 为 `https://upload.dustarry.com`，自有部署可通过
+STARRY_CAS_DIRECT_UPLOAD_ORIGIN 指定；禁止任意域名和跳转，不回退旧上传接口。
+MCP 宿主先按同一图片入口准备 bytes，调用 prepare；present=true 时直接 finalize，
+否则使用返回 uploadUrl/method/ticket 上传，核对 receipt 后将 ticket/receipt
+连同同一 SHA256/mediaType/byteSize/requestKey 传入 finalize。远程工具不读取本机路径。
 
 `media download` 必须使用工作区的 id/mediaRole 或正式版本的
 owner/slug/revision/fileRefId。交付 URL 由权限端点解析；下载不跟随重定向，

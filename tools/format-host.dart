@@ -7,6 +7,7 @@ import 'package:crypto/crypto.dart';
 import 'package:starry_character_card_codec/starry_character_card_codec.dart';
 import 'package:starry_domain_entities/starry_domain_entities.dart';
 import 'package:starry_prompt_compiler/starry_prompt_compiler.dart';
+import '../../starry/lib/core/media/image_media_intake.dart';
 
 // Invoked only by the CLI in a private staging directory. No HTTP, credentials,
 // database access or archive extraction is performed by this process.
@@ -21,6 +22,13 @@ Future<void> main(List<String> args) async {
       final graph =
           jsonDecode(await File(input).readAsString()) as Map<String, dynamic>;
       await exportGraph(type, graph, output);
+    } else if (action == 'image') {
+      final purpose = ImageMediaPurpose.values.byName(type);
+      final prepared = await ImageMediaIntake.prepare(
+        bytes: await File(input).readAsBytes(),
+        purpose: purpose,
+      );
+      await File(output).writeAsBytes(prepared.bytes);
     } else {
       throw const FormatException('Unknown host action');
     }
@@ -236,6 +244,7 @@ Future<Map<String, dynamic>> inspect(
   } else {
     throw const FormatException('Unsupported object');
   }
+  await normalizeMedia(media, relations, books, stage);
   return {
     'character': character,
     'characters': characters,
@@ -250,6 +259,61 @@ Future<Map<String, dynamic>> inspect(
     'media': media,
     'warnings': warnings,
   };
+}
+
+Future<void> normalizeMedia(
+  List<Map<String, dynamic>> media,
+  List<Map<String, dynamic>> relations,
+  List<Map<String, dynamic>> books,
+  String stage,
+) async {
+  final normalized = <String, Map<String, dynamic>>{};
+  for (final item in media) {
+    final oldHash = item['sha256'];
+    final roles = <ImageMediaPurpose>[];
+    for (final relation in relations) {
+      if (relation['target_id'] == oldHash) {
+        roles.add(imagePurposeForRole(relation['role'] as String));
+      }
+    }
+    for (final book in books) {
+      final slots = object(object(book['extensions'])['starry_media']);
+      for (final slot in slots.entries) {
+        if (slot.value == oldHash) roles.add(imagePurposeForRole(slot.key));
+      }
+    }
+    final bytes = await File(item['file'] as String).readAsBytes();
+    if (sha256.convert(bytes).toString() != oldHash) {
+      throw const FormatException('Packaged media digest mismatch');
+    }
+    final prepared = await ImageMediaIntake.prepare(
+      bytes: bytes,
+      purpose: ImageMediaPurpose.strongest(roles),
+    );
+    final digest = sha256.convert(prepared.bytes).toString();
+    final path = '$stage/prepared-$digest';
+    await File(path).writeAsBytes(prepared.bytes);
+    normalized[digest] = {
+      'sha256': digest,
+      'mediaType': prepared.mimeType,
+      'file': path,
+    };
+    for (final relation in relations) {
+      if (relation['target_id'] == oldHash) relation['target_id'] = digest;
+    }
+    for (final book in books) {
+      final slots = object(object(book['extensions'])['starry_media']);
+      for (final slot in slots.entries.toList()) {
+        if (slot.value == oldHash) slots[slot.key] = digest;
+      }
+      if (slots.isNotEmpty) {
+        (book['extensions'] as Map)['starry_media'] = slots;
+      }
+    }
+  }
+  media
+    ..clear()
+    ..addAll(normalized.values);
 }
 
 final timestamp = DateTime.utc(2000);
