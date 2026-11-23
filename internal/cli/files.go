@@ -504,10 +504,7 @@ func normalizeGraph(g *fileGraph, kind, seed string) ([]importStep, error) {
 			step.Input.AcquisitionOrigin = origins[step.Input.ID]
 		}
 		raw, _ := json.Marshal(step.Input)
-		limit := 64 << 10
-		if step.Name == "catalog_create_skill" {
-			limit = 4 << 20
-		}
+		limit := catalog.InputLimit(step.Name)
 		if len(raw) > limit {
 			return nil, errors.New("single authoring intent exceeds Catalog limit")
 		}

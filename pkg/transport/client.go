@@ -96,7 +96,7 @@ func (b *Client) Do(ctx context.Context, method, path, token, requestKey string,
 		if err != nil {
 			return Response{}, err
 		}
-		if len(data) > 64<<10 {
+		if len(data) > RequestBodyLimit(method, path) {
 			return Response{}, NewAPIError(400, "request_too_large")
 		}
 		reader = bytes.NewReader(data)
@@ -139,6 +139,18 @@ func (b *Client) UploadRaw(ctx context.Context, path, token, mediaType string, s
 	req.Header.Set("Content-Type", mediaType)
 	req.Header.Set("Accept", "application/json")
 	return b.send(req)
+}
+
+func RequestBodyLimit(method, path string) int {
+	if method == http.MethodPost {
+		switch path {
+		case "/api/v1/authoring/catalog/skill.create", "/api/v1/authoring/catalog/skill.update",
+			"/api/v1/authoring/catalog/skill_binding.create", "/api/v1/authoring/catalog/skill_binding.update",
+			"/api/v1/authoring/catalog/skill_binding.apply":
+			return 4 << 20
+		}
+	}
+	return 64 << 10
 }
 
 func (b *Client) send(req *http.Request) (Response, error) {

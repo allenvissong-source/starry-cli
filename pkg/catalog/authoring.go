@@ -46,13 +46,17 @@ var WriteActions = map[string]string{
 }
 var intentKey = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$`)
 
+func InputLimit(name string) int {
+	return transport.RequestBodyLimit("POST", "/api/v1/authoring/catalog/"+WriteActions[name])
+}
+
 func Write(ctx context.Context, client *transport.Client, token, name string, data json.RawMessage) (map[string]any, error) {
 	action := WriteActions[name]
 	if action == "" {
 		return nil, errors.New("unknown authoring action")
 	}
 	var input WriteInput
-	if err := transport.DecodeInput(data, &input); err != nil {
+	if err := transport.DecodeInputBounded(data, &input, InputLimit(name)); err != nil {
 		return nil, err
 	}
 	if !intentKey.MatchString(input.RequestKey) || input.ID != "" && !assets.UUID.MatchString(input.ID) ||

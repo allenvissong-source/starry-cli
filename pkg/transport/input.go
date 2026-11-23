@@ -11,10 +11,14 @@ import (
 )
 
 func DecodeInput(data json.RawMessage, out any) error {
+	return DecodeInputBounded(data, out, 64<<10)
+}
+
+func DecodeInputBounded(data json.RawMessage, out any, limit int) error {
 	if len(data) == 0 {
 		data = json.RawMessage(`{}`)
 	}
-	if len(data) > 64<<10 || len(bytes.TrimSpace(data)) == 0 || bytes.TrimSpace(data)[0] != '{' {
+	if len(data) > limit || len(bytes.TrimSpace(data)) == 0 || bytes.TrimSpace(data)[0] != '{' {
 		return errors.New("invalid JSON object")
 	}
 	decoder := json.NewDecoder(bytes.NewReader(data))

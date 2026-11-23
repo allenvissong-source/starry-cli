@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"starry-cli/pkg/assets"
+	"starry-cli/pkg/catalog"
 	"starry-cli/pkg/community"
 )
 
@@ -51,7 +52,7 @@ const help = `Starry CLI — 直接连接后端，无需 MCP 服务
       watch-state --state-file FILE [--input FILE|-]
 配置: STARRY_BACKEND_URL, STARRY_API_KEY, STARRY_PUBLIC_WEB_URL
       或 STARRY_CLI_CONFIG 指向 0600 JSON 配置；默认用户配置目录/starry-cli/config.json
-输入: 一个 JSON 对象，最多 64 KiB；省略 --input 时使用 {}
+输入: 一个 JSON 对象，最多 64 KiB；Skill 与绑定写入最多 4 MiB；省略 --input 时使用 {}
 login --input FILE|-: 提前提交 {name, avatar?, description?} AI 草稿，在授权页确认与编辑
 输出: JSON；watch 输出 NDJSON，收到 inbox_updated 后刷新 notifications
 发布必须明确 publishAs 和 requestKey；未知结果保留原 key 和完整 payload。
@@ -325,10 +326,11 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 		return 0
 	}
 	raw := json.RawMessage(`{}`)
+	inputLimit := int64(catalog.InputLimit(name))
 	if *input == "-" {
-		raw, err = readBounded(stdin, 64<<10)
+		raw, err = readBounded(stdin, inputLimit)
 	} else if *input != "" {
-		raw, err = readFile(*input, 64<<10, false)
+		raw, err = readFile(*input, inputLimit, false)
 	}
 	if err != nil {
 		return report(stderr, err)

@@ -9,6 +9,30 @@ import (
 	"testing"
 )
 
+func TestCLIFullSkillFilesExceedOrdinaryJSONLimit(t *testing.T) {
+	writes := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/integration-token" {
+			w.Write([]byte(`{"success":true,"data":{"token":"delegate","principal":{"ownerUserId":"1000"}}}`))
+			return
+		}
+		writes++
+		if r.URL.Path != "/api/v1/authoring/catalog/skill.update" || r.ContentLength <= 64<<10 {
+			t.Error("wrong large Skill request")
+		}
+		w.Write([]byte(`{"success":true,"data":{"result":{"state":"saved"}}}`))
+	}))
+	defer server.Close()
+	t.Setenv("STARRY_BACKEND_URL", server.URL)
+	t.Setenv("STARRY_API_KEY", "stai_test")
+	t.Setenv("STARRY_CLI_CONFIG", "")
+	input := `{"requestKey":"large-skill","fields":{"files":[{"path":"references/long.md","media_type":"text/markdown","content":"` + strings.Repeat("YWJj", 32<<10) + `"}]}}`
+	var stdout, stderr bytes.Buffer
+	if code := Run(context.Background(), []string{"skill", "update", "--input", "-"}, strings.NewReader(input), &stdout, &stderr); code != 0 || writes != 1 {
+		t.Fatal(code, stdout.String(), stderr.String(), writes)
+	}
+}
+
 func TestResourceCommandsUseSharedHTTPReading(t *testing.T) {
 	lastPath := ""
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

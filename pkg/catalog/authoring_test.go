@@ -5,10 +5,43 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"starry-cli/pkg/transport"
 )
+
+func TestCompleteSkillInventoriesUseBackendSpecificBounds(t *testing.T) {
+	calls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if r.ContentLength <= 64<<10 || r.ContentLength > 4<<20 {
+			t.Error("unexpected Skill body bound")
+		}
+		w.Write([]byte(`{"success":true,"data":{"result":{"state":"saved"}}}`))
+	}))
+	defer server.Close()
+	client, _ := transport.NewClient(transport.Config{BackendURL: server.URL})
+	payload := `{"requestKey":"large-skill","fields":{"files":[{"path":"references/long.md","media_type":"text/markdown","content":"` + strings.Repeat("YWJj", 32<<10) + `"}]}}`
+	for _, name := range []string{"catalog_create_skill", "catalog_update_skill", "catalog_create_skill_binding",
+		"catalog_update_skill_binding", "catalog_apply_character_skills"} {
+		if _, err := Call(context.Background(), client, "delegate", name, json.RawMessage(payload)); err != nil {
+			t.Fatal(name, err)
+		}
+	}
+	for _, name := range []string{"catalog_update_character", "catalog_apply_collection_items", "catalog_delete_skill"} {
+		if _, err := Call(context.Background(), client, "delegate", name, json.RawMessage(payload)); err == nil {
+			t.Fatal("ordinary action enlarged", name)
+		}
+	}
+	if _, err := Call(context.Background(), client, "delegate", "catalog_create_skill",
+		json.RawMessage(`{"requestKey":"oversized","fields":{"summary":"`+strings.Repeat("x", 4<<20)+`"}}`)); err == nil {
+		t.Fatal("oversized complete Skill intent accepted")
+	}
+	if calls != 5 {
+		t.Fatal("rejected requests reached backend", calls)
+	}
+}
 
 func TestAuthoringSharedRequestPreservesNullAnd201(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

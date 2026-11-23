@@ -2,7 +2,8 @@
 
 CLI 通过获准的 HTTP 接口操作工作区与正式资源。文件转换由同目录的
 `starry-format-host`（Windows 为 `.exe`）执行，不访问 App 数据库。
-输入 JSON 最多 64 KiB；文件路径只传给本机 CLI。远程 MCP 接收 SHA256
+普通输入 JSON 最多 64 KiB；Skill 创建/更新与绑定创建/更新/批量 apply
+携带完整库存时，完整 JSON 意图最多 4 MiB，与后端一致。文件路径只传给本机 CLI。远程 MCP 接收 SHA256
 上传句柄，不访问用户文件系统。
 
 ## 格式与发行
