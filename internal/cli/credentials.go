@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"starry-cli/pkg/community"
+	"github.com/allenvissong-source/starry-cli/pkg/community"
 )
 
 func validCredential(value string) bool {

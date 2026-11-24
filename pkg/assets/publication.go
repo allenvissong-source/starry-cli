@@ -8,7 +8,7 @@ import (
 	"regexp"
 	"strings"
 
-	"starry-cli/pkg/transport"
+	"github.com/allenvissong-source/starry-cli/pkg/transport"
 )
 
 type PublicationInput struct {

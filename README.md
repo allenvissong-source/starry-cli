@@ -6,15 +6,15 @@ SDK 只使用 Go 标准库，MCP 仓库引用它。CLI 的构建和运行都不�
 
 ## 用户安装
 
-普通用户取得与系统和架构匹配的发行包，解压后：
+从 [GitHub Releases](https://github.com/allenvissong-source/starry-cli/releases) 下载与系统和架构匹配的发行包，解压后：
 
-1. 将 `starry-cli`（Windows 为 `starry-cli.exe`）放到 PATH 中的可执行目录。
+1. 将解压后的完整目录放在本机用户的程序目录，并将该目录加入 PATH；CLI、格式宿主、能力清单与许可证保持在一起。
 2. 按需将四个 `starry-*` Skill 整个文件夹复制到助手客户端的 skills 目录。
 3. 运行 `starry-cli login`，默认连接正式 API，在浏览器中登录并批准需要的权限。
 
 发行包只包含可执行文件、Skill 和使用说明，不需要源码、Go 或 MCP 服务。
 macOS/Linux 可用 `tar -xzf <发行包>`，Windows 可用系统 `tar -xf <发行包>`。
-发行以维护者交付的包和 SHA256SUMS 为准；运行 `starry-cli --version` 可核对
+使用同一 Release 的 `SHA256SUMS` 校验下载内容；运行 `starry-cli --version` 可核对
 发行号、源码摘要和构建平台。源码分支状态不代表已安装二进制的版本。
 
 ## 源码构建
@@ -38,12 +38,24 @@ starry-cli --help
 ```
 
 本仓库 `go.mod` 没有外部模块依赖，也没有指向其他仓库的 `replace`。
-开发 MCP 时，由其 `go.mod` 使用同级 `../starry-cli`；正式发布后应改成真实
-公开模块路径和固定版本。不会复制 SDK 代码，也不会反向依赖 MCP。
+SDK 位于 `pkg/`，通过 HTTP 调用后端；CLI 不依赖 MCP 或其他工作区源码。
+
+外部 Go 项目通过公开模块地址引用 SDK：
+
+```sh
+go get github.com/allenvissong-source/starry-cli@v1.0.0
+```
+
+导入路径为 `github.com/allenvissong-source/starry-cli/pkg/community`。
+源码直接构建时 `--version` 标记为 development；正式包从 `VERSION` 注入版本、
+Release 标签和源码 provenance。
+
+源码、SDK、文档和随包 Skills 使用 [Apache License 2.0](LICENSE)。
+格式宿主随包附带时，其第三方组件遵循各自许可证。
 
 ## 打包分发
 
-在具备 Go、tar、shasum 的 macOS/Linux 构建机器上运行：
+在具备 Go、Python 3、tar、shasum 和 realpath 的 macOS/Linux 构建机器上运行：
 
 ```sh
 sh tools/package-release.sh /已有的空输出目录
@@ -53,11 +65,14 @@ sh tools/package-release.sh /已有的空输出目录
 每份包含二进制、四个完整 Skill、[安装说明](INSTALL.md)、源码构建清单与能力清单；
 另生成独立 Skills ZIP 和 `SHA256SUMS`。
 公开清单仅记录 CLI 构建的提交、源码摘要和版本元数据，不包含源码文件清单或其他仓库的版本。
-构建机若有已解析 codec 依赖的 Dart SDK，本机目标额外包含原生格式宿主。
-其他目标须提供已验证的预编译宿主，否则能力清单明确关闭文件转换。
+格式宿主通过 `STARRY_FORMAT_HOST_DIR` 显式提供预编译程序，目录结构为
+`<目录>/<系统>-<架构>/starry-format-host`（Windows 增加 `.exe`）。
+未提供宿主的目标包明确关闭文件转换和图片上传，保留其余 CLI 功能。
 格式范围、导入进度恢复、权限及原始扩展保留见 [文件操作](FILES.md)。
 输出目录必须是绝对路径且已存在、为空，防止覆盖旧发行包。
-构建后的包可以独立分发；上传发行包和创建公开仓库仍需单独执行。
+正式打包要求源码工作树干净且已提交；权威版本来自 `VERSION`。
+将生成的六份平台包、Skills ZIP、`SHA256SUMS` 和 `release-manifest.json`
+上传到同一 GitHub Release。包内包含 Apache-2.0 许可证。
 
 ## 配置
 默认 API 为 `https://api.dustarry.com`，网页为 `https://dustarry.com`，
@@ -88,7 +103,7 @@ Windows 使用本用户专属、受 ACL 保护的目录。OAuth 的 `stro_` 刷�
 手工 Key 通过 `POST /api/v1/integration-token` 兑换两分钟 JWT，不自动轮换。
 浏览器 login 前解除 STARRY_API_KEY 环境覆盖。可选 STARRY_PUBLIC_WEB_URL 用于
 覆盖正式网页地址。自有部署可覆盖三个 endpoint；环境变量优先于私有配置，后者
-优先于默认值。已有本地配置不自动迁移；自有后端未配置网页时不生成正式站点链接。
+优先于默认值。配置的后端地址保持不变；自有后端需配置网页地址才能生成内容链接。
 CLI 不需要 MCP 服务端 secret。
 HTTPS origin 或回环 HTTP 才被允许，重定向被禁止。
 
@@ -96,8 +111,8 @@ HTTPS origin 或回环 HTTP 才被允许，重定向被禁止。
 
 主账号 UID、资源地址的 `owner` / 搜索的 `author`、社区筛选的 `authorId`
 均使用规范十进制字符串，例如 `"1000"`；不得转换为浮点数。`authorId` 另支持
-`"me"`。0–999 为保留号，不代表权限；普通新账号从 1000 分配，旧字符串 ID
-已停止接受。公开名称是唯一的 `username`，`nickname` 是私人昵称，不用于公开
+`"me"`。0–999 为保留号，不代表权限；普通新账号从 1000 分配。
+公开名称是唯一的 `username`，`nickname` 是私人昵称，不用于公开
 署名。身份响应的 `principal.ownerName` 表示公开用户名；AI 身份 ID、资源 UUID
 与主账号 UID 保持各自类型。
 

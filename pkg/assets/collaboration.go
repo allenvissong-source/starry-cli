@@ -8,7 +8,7 @@ import (
 	"slices"
 	"strings"
 
-	"starry-cli/pkg/transport"
+	"github.com/allenvissong-source/starry-cli/pkg/transport"
 )
 
 type SuggestionsInput struct {

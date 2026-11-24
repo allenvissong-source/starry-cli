@@ -18,7 +18,7 @@ CLI 通过获准的 HTTP 接口操作工作区与正式资源。文件转换由�
 
 角色支持 JSON、PNG `chara`、CharX 和当前 codec 的 `.starry` 角色包。
 独立世界书只支持 JSON；`.starry` 角色包可携带多本世界书。
-角色、Skill 与合集的 `.starry` 包统一读写整数 `package_version=1`，由共享编解码层验证完整资源、Skill 文件库存、绑定、作者归属及获取来源。角色包没有 Skill 时也必须声明空库存和空绑定。其他格式号和不完整的旧结构明确拒绝；历史样包需从作者源离线重新构建，不能只改 manifest 数字。`character_version` 是作者维护的内容版本，原样保留。
+角色、Skill 与合集的 `.starry` 包统一读写整数 `package_version=1`，由共享编解码层验证完整资源、Skill 文件库存、绑定、作者归属及获取来源。角色包必须声明 Skill 库存和绑定，未附带 Skill 时均为空。其他格式号和不完整结构明确拒绝。`character_version` 是作者维护的内容版本，原样保留。
 Skill 支持标准 Markdown、单 Skill 目录 ZIP、独立 `.starry`；
 合集支持 `.starry`，保留角色、世界书、共享 Skill、关闭的 Skill 绑定、
 成员排序/分组/说明及获取来源。带 `.starry` manifest 的 ZIP 走严格包解析，
@@ -29,23 +29,21 @@ Skill 支持标准 Markdown、单 Skill 目录 ZIP、独立 `.starry`；
 embedded 绑定；空条目不会被当作未附带世界书。
 
 只有带 `file-capabilities.json` 中 `fileImportExport:true` 及格式宿主的包
-支持文件转换。本机 macOS ARM64 已实际构建并验证；其余五个目标只交付 Go
-CLI，等待各平台构建并验证宿主。图片规范化上传也需要该宿主；
+支持文件转换。图片规范化上传也需要该宿主；
 `imagePreparation` 与 `mediaUpload` 在能力清单明确标识。下载、结构化草稿编辑与读取不依赖
 格式宿主。用户不需 Go、Dart、Flutter SDK 或后端源码。
 
-维护者用已解析的 Starry 主应用 package_config 构建原生宿主，
-以包含当前格式入口所需的 codec、domain 与 compiler 依赖；发行后的 AOT
-宿主独立运行，不需要这些开发依赖：
+维护者通过 `STARRY_FORMAT_HOST_DIR` 提供与目标系统和架构一致的预编译宿主。
+目录结构为 `<目录>/<系统>-<架构>/starry-format-host`，Windows 程序增加 `.exe`。
+每个宿主旁须提供 `<程序名>.NOTICES`，包含实际编译组件的第三方许可证，
+发行包保留为 `FORMAT_HOST_NOTICES`。
+打包仅消费明确提供的程序，未提供的目标在能力清单中关闭对应功能：
 
 ```sh
-sh tools/build-format-host.sh /已有目录/starry-format-host
-python3 tools/test-format-host.py /已有目录/starry-format-host
-sh tools/package-release.sh /已有空目录
+STARRY_FORMAT_HOST_DIR=/已有的宿主目录 sh tools/package-release.sh /已有空目录
 ```
 
-打包会构建本机宿主；可用 `STARRY_FORMAT_HOST_DIR` 指向已验证的其他平台组件，
-目录结构为 `darwin-arm64/starry-format-host` 等。所有包均生成 SHA256SUMS。
+所有包均生成 SHA256SUMS。
 升级时先核验校验值，再把 CLI、宿主、能力文件一起替换。没有配置发布者
 签名或公证，校验和只能验证字节，不能证明发布者身份。
 
@@ -150,7 +148,7 @@ purpose=avatar|cover|background|content|illustration，默认 content。静态�
 直传顺序为：查已存在 blob → POST prepare → 无凭证 PUT 到配置媒体 origin 的
 `/uploads/<ticket>` → 核对摘要/大小/receipt → POST complete → 注册资产。
 正式直传 origin 为 `https://upload.dustarry.com`，自有部署可通过
-STARRY_CAS_DIRECT_UPLOAD_ORIGIN 指定；禁止任意域名和跳转，不回退旧上传接口。
+STARRY_CAS_DIRECT_UPLOAD_ORIGIN 指定；禁止任意域名和跳转。
 MCP 宿主先按同一图片入口准备 bytes，调用 prepare；present=true 时直接 finalize，
 否则使用返回 uploadUrl/method/ticket 上传，核对 receipt 后将 ticket/receipt
 连同同一 SHA256/mediaType/byteSize/requestKey 传入 finalize。远程工具不读取本机路径。

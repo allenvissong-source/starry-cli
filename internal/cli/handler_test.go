@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"starry-cli/pkg/community"
+	"github.com/allenvissong-source/starry-cli/pkg/community"
 )
 
 // The test executable doubles as a real host and state-lock subprocess.

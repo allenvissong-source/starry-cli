@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"starry-cli/pkg/transport"
+	"github.com/allenvissong-source/starry-cli/pkg/transport"
 )
 
 type Config = transport.Config

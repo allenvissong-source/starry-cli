@@ -20,9 +20,9 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"starry-cli/pkg/assets"
-	"starry-cli/pkg/catalog"
-	"starry-cli/pkg/transport"
+	"github.com/allenvissong-source/starry-cli/pkg/assets"
+	"github.com/allenvissong-source/starry-cli/pkg/catalog"
+	"github.com/allenvissong-source/starry-cli/pkg/transport"
 )
 
 const maxGraphBytes = 64 << 20

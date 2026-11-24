@@ -15,6 +15,10 @@ root = Path(sys.argv[1]).resolve()
 source = ROOT
 skills = ("starry-community", "starry-character", "starry-worldbook", "starry-assets")
 manifest = json.loads((root / "release-manifest.json").read_text())
+if manifest.get("version") != (source / "VERSION").read_text().strip() or manifest.get("releaseId") != "v" + manifest["version"]:
+    raise ValueError("release version does not match authoritative VERSION")
+if manifest.get("source", {}).get("dirty") is not False:
+    raise ValueError("official release source is dirty")
 if set(manifest) != {"version", "releaseId", "builtAt", "source", "defaultEndpoints", "skills"}:
     raise ValueError("unexpected fields in public release manifest")
 source_fields = {"baseCommit", "dirty", "sourceDigest"}
@@ -71,8 +75,14 @@ for name, digest in checksums.items():
                 raise ValueError("duplicate ZIP path")
             for item in names:
                 path = PurePosixPath(item)
+                if item == "LICENSE":
+                    if archive.read(item) != (source / "LICENSE").read_bytes():
+                        raise ValueError("Skills license differs from source")
+                    continue
                 if path.is_absolute() or ".." in path.parts or path.parts[0] not in skills:
                     raise ValueError("unsafe ZIP path")
+            if "LICENSE" not in names:
+                raise ValueError("missing Skills license")
             validate_skills({item: archive.read(item) for item in names})
         continue
     prefix = name.removesuffix(".tar.gz")
@@ -90,11 +100,34 @@ for name, digest in checksums.items():
         binary = "starry-cli.exe" if "-windows-" in name else "starry-cli"
         if prefix + "/" + binary not in names:
             raise ValueError("missing CLI")
+        if not archive.getmember(prefix + "/" + binary).mode & 0o111:
+            raise ValueError("CLI is not executable")
+        if archive.extractfile(prefix + "/README.md").read() != (source / "INSTALL.md").read_bytes():
+            raise ValueError("packaged install instructions differ from source")
+        if archive.extractfile(prefix + "/FILES.md").read() != (source / "FILES.md").read_bytes():
+            raise ValueError("packaged file instructions differ from source")
+        if archive.extractfile(prefix + "/LICENSE").read() != (source / "LICENSE").read_bytes():
+            raise ValueError("CLI license differs from source")
+        if archive.extractfile(prefix + "/THIRD_PARTY_NOTICES").read() != (source / "THIRD_PARTY_NOTICES").read_bytes():
+            raise ValueError("CLI third-party notices differ from source")
         capabilities = json.loads(archive.extractfile(prefix + "/file-capabilities.json").read())
         if capabilities["fileImportExport"] != capabilities["imagePreparation"] or capabilities["mediaUpload"] != capabilities["imagePreparation"]:
             raise ValueError("inconsistent image and format capabilities")
         if capabilities["fileImportExport"] and prefix + "/" + capabilities["host"] not in names:
             raise ValueError("capability host missing")
+        if capabilities["fileImportExport"] and prefix + "/FORMAT_HOST_NOTICES" not in names:
+            raise ValueError("format host license notices missing")
+        if capabilities["fileImportExport"] and not archive.getmember(prefix + "/" + capabilities["host"]).mode & 0o111:
+            raise ValueError("format host is not executable")
+        allowed = {prefix, *(prefix + "/" + item for item in
+                   (binary, "README.md", "FILES.md", "LICENSE", "THIRD_PARTY_NOTICES",
+                    "file-capabilities.json", "release-manifest.json"))}
+        if capabilities["fileImportExport"]:
+            allowed.update({prefix + "/" + capabilities["host"], prefix + "/FORMAT_HOST_NOTICES"})
+        for member_name in names:
+            if member_name not in allowed and not any(member_name == prefix + "/" + s or
+                    member_name.startswith(prefix + "/" + s + "/") for s in skills):
+                raise ValueError("unexpected release component: " + member_name)
         if json.loads(archive.extractfile(prefix + "/release-manifest.json").read()) != manifest:
             raise ValueError("embedded release provenance differs")
         files = {m.name: archive.extractfile(m).read() for m in members if m.isfile() and any(m.name.startswith(prefix + "/" + s + "/") for s in skills)}

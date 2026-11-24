@@ -10,7 +10,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"starry-cli/pkg/transport"
+	"github.com/allenvissong-source/starry-cli/pkg/transport"
 )
 
 func TestCollaborationPreservesIntentAndDisallowsUnknownFields(t *testing.T) {

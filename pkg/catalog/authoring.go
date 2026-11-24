@@ -7,8 +7,8 @@ import (
 	"net/url"
 	"regexp"
 
-	"starry-cli/pkg/assets"
-	"starry-cli/pkg/transport"
+	"github.com/allenvissong-source/starry-cli/pkg/assets"
+	"github.com/allenvissong-source/starry-cli/pkg/transport"
 )
 
 type Change struct {

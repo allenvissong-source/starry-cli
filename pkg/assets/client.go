@@ -10,7 +10,7 @@ import (
 	"slices"
 	"strconv"
 
-	"starry-cli/pkg/transport"
+	"github.com/allenvissong-source/starry-cli/pkg/transport"
 )
 
 type SearchInput struct {

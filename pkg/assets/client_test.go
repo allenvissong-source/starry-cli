@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"starry-cli/pkg/transport"
+	"github.com/allenvissong-source/starry-cli/pkg/transport"
 )
 
 func TestSDKReadingLimitsErrorsAndFixedRevision(t *testing.T) {

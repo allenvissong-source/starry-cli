@@ -9,7 +9,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"starry-cli/pkg/transport"
+	"github.com/allenvissong-source/starry-cli/pkg/transport"
 )
 
 func TestPublicationUsesExactInputsAndPreservesUnknownIntent(t *testing.T) {

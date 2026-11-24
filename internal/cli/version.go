@@ -4,10 +4,10 @@ import (
 	"runtime"
 	"runtime/debug"
 
-	"starry-cli/pkg/transport"
+	"github.com/allenvissong-source/starry-cli/pkg/transport"
 )
 
-var Version = "1.0.0"
+var Version = "development"
 var ReleaseID = "development"
 var SourceCommit = ""
 var SourceDigest = ""

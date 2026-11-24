@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"starry-cli/pkg/transport"
+	"github.com/allenvissong-source/starry-cli/pkg/transport"
 )
 
 func TestPublishedMediaSlotsUseLogicalPathAndDeliveryRoleTogether(t *testing.T) {

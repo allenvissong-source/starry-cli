@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"starry-cli/pkg/community"
+	"github.com/allenvissong-source/starry-cli/pkg/community"
 )
 
 type handlerConfig struct {

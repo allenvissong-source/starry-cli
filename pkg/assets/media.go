@@ -16,15 +16,14 @@ import (
 
 	"crypto/sha256"
 	"encoding/hex"
-	"starry-cli/pkg/transport"
+	"github.com/allenvissong-source/starry-cli/pkg/transport"
 )
 
 const MaxMediaBytes int64 = 128 << 20
 
 var MediaHash = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
-// The handle is a digest uploaded by the host through the authenticated CAS
-// route. It is never interpreted as a server file path or a remote URL.
+// The handle is a digest of host-managed bytes, never a file path or URL.
 type MediaInput struct {
 	SHA256     string `json:"sha256" jsonschema:"Bare lowercase SHA256 handle; no URL or local path"`
 	MediaType  string `json:"mediaType" jsonschema:"image/png, image/jpeg, image/gif or image/webp"`

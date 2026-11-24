@@ -20,7 +20,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"starry-cli/pkg/community"
+	"github.com/allenvissong-source/starry-cli/pkg/community"
 )
 
 func randomOAuthValue() (string, error) {

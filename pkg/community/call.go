@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/allenvissong-source/starry-cli/pkg/assets"
+	"github.com/allenvissong-source/starry-cli/pkg/catalog"
+	"github.com/allenvissong-source/starry-cli/pkg/transport"
 	"slices"
-	"starry-cli/pkg/assets"
-	"starry-cli/pkg/catalog"
-	"starry-cli/pkg/transport"
 	"strings"
 )
 

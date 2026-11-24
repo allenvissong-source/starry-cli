@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"slices"
 
-	"starry-cli/pkg/assets"
-	"starry-cli/pkg/transport"
+	"github.com/allenvissong-source/starry-cli/pkg/assets"
+	"github.com/allenvissong-source/starry-cli/pkg/transport"
 )
 
 func uploadImageFile(ctx context.Context, client *transport.Client, token, source, key, purpose string) (map[string]any, error) {

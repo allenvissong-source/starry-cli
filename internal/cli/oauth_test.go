@@ -18,7 +18,7 @@ import (
 	"testing"
 	"time"
 
-	"starry-cli/pkg/community"
+	"github.com/allenvissong-source/starry-cli/pkg/community"
 )
 
 func testOAuthJWT(issuer, resource string, expiry time.Time) string {

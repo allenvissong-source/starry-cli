@@ -4,10 +4,11 @@ from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
+import re
 import sys
 
 sys.dont_write_bytecode = True
-from release_source import ROOT, revision, snapshot
+from release_source import ROOT, snapshot
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("output", type=Path)
@@ -17,9 +18,12 @@ if args.internal_output and args.internal_output.resolve().parent == args.output
     parser.error("internal inventory must use a different output directory")
 
 source = snapshot(ROOT)
+version = (ROOT / "VERSION").read_text().strip()
+if not re.fullmatch(r"[1-9][0-9]*\.[0-9]+\.[0-9]+", version):
+    parser.error("VERSION must declare a stable semantic version")
 now = datetime.now(timezone.utc)
 manifest = {
-    "version": "1.0.0", "releaseId": "v1-" + now.strftime("%Y%m%dT%H%M%SZ"),
+    "version": version, "releaseId": "v" + version,
     "builtAt": now.isoformat(),
     "source": {key: source[key] for key in ("baseCommit", "dirty", "sourceDigest")},
     "defaultEndpoints": {"backendUrl": "https://api.dustarry.com",
@@ -32,12 +36,6 @@ if args.internal_output:
     inventory = {
         **manifest,
         "source": source,
-        "formatHostSources": {
-            name: snapshot(ROOT.parent / name)
-            for name in ("starry", "starry_character_card_codec", "starry_domain_entities", "starry_prompt_compiler")
-        },
-        "sdkConsumer": revision(ROOT.parent / "starry-mcp"),
-        "contractSource": revision(ROOT.parent / "starry-go-backend"),
     }
     with open(args.internal_output, "x", opener=lambda path, flags: os.open(path, flags, 0o600)) as stream:
         json.dump(inventory, stream, ensure_ascii=False, indent=2)

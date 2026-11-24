@@ -9,7 +9,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"starry-cli/pkg/transport"
+	"github.com/allenvissong-source/starry-cli/pkg/transport"
 )
 
 const (

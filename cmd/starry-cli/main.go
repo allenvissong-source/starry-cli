@@ -6,7 +6,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"starry-cli/internal/cli"
+	"github.com/allenvissong-source/starry-cli/internal/cli"
 )
 
 func main() {

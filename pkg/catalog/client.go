@@ -7,8 +7,8 @@ import (
 	"errors"
 	"net/url"
 
-	"starry-cli/pkg/assets"
-	"starry-cli/pkg/transport"
+	"github.com/allenvissong-source/starry-cli/pkg/assets"
+	"github.com/allenvissong-source/starry-cli/pkg/transport"
 )
 
 type ListInput struct {

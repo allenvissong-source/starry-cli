@@ -5,6 +5,7 @@ import zipfile
 
 root = Path(__file__).resolve().parent.parent / "skills"
 with zipfile.ZipFile(sys.argv[1], "w", compression=zipfile.ZIP_DEFLATED) as archive:
+    archive.write(root.parent / "LICENSE", "LICENSE")
     for skill in ("starry-community", "starry-character", "starry-worldbook", "starry-assets"):
         for path in sorted((root / skill).rglob("*")):
             if path.is_file() and path.name != ".DS_Store" and not path.name.startswith("._"):

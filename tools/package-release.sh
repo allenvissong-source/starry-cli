@@ -28,19 +28,17 @@ for required in go tar shasum python3; do
 done
 
 repo_dir=$(dirname "$(realpath "$0")")/..
+if [ -n "$(git -C "$repo_dir" status --porcelain)" ]; then
+  echo "Release packaging requires a clean committed source tree." >&2
+  exit 1
+fi
 staging_dir=$(mktemp -d "${TMPDIR:-/tmp}/starry-cli-package.XXXXXX")
 trap 'rm -rf "$staging_dir"' EXIT
 trap 'exit 1' HUP INT TERM
 
-native_os=$(go env GOHOSTOS)
-native_arch=$(go env GOHOSTARCH)
-native_host="$staging_dir/starry-format-host"
 python3 "$repo_dir/tools/sync-skill-references.py" --check
 python3 "$repo_dir/tools/release-manifest.py" "$staging_dir/release-manifest.json"
-build_flags=$(python3 -c 'import json,sys; m=json.load(open(sys.argv[1])); v={"Version":m["version"],"ReleaseID":m["releaseId"],"SourceCommit":m["source"]["baseCommit"],"SourceDigest":m["source"]["sourceDigest"],"SourceDirty":str(m["source"]["dirty"]).lower(),"BuildTime":m["builtAt"]}; print("-s -w "+" ".join("-X starry-cli/internal/cli."+k+"="+v for k,v in v.items()))' "$staging_dir/release-manifest.json")
-if command -v dart >/dev/null 2>&1; then
-  sh "$repo_dir/tools/build-format-host.sh" "$native_host"
-fi
+build_flags=$(python3 -c 'import json,sys; m=json.load(open(sys.argv[1])); v={"Version":m["version"],"ReleaseID":m["releaseId"],"SourceCommit":m["source"]["baseCommit"],"SourceDigest":m["source"]["sourceDigest"],"SourceDirty":str(m["source"]["dirty"]).lower(),"BuildTime":m["builtAt"]}; print("-s -w "+" ".join("-X github.com/allenvissong-source/starry-cli/internal/cli."+k+"="+v for k,v in v.items()))' "$staging_dir/release-manifest.json")
 
 for target_os in darwin linux windows; do
   for target_arch in amd64 arm64; do
@@ -58,11 +56,14 @@ for target_os in darwin linux windows; do
     if [ -n "${STARRY_FORMAT_HOST_DIR:-}" ] &&
       [ -f "$STARRY_FORMAT_HOST_DIR/$target_os-$target_arch/$host_name" ]; then
       host="$STARRY_FORMAT_HOST_DIR/$target_os-$target_arch/$host_name"
-    elif [ "$target_os" = "$native_os" ] && [ "$target_arch" = "$native_arch" ] && [ -f "$native_host" ]; then
-      host="$native_host"
     fi
     if [ -n "$host" ]; then
+      if [ ! -s "$host.NOTICES" ]; then
+        echo "Format host license notices are missing: $host.NOTICES" >&2
+        exit 1
+      fi
       cp "$host" "$package_dir/$host_name"
+      cp "$host.NOTICES" "$package_dir/FORMAT_HOST_NOTICES"
       chmod 755 "$package_dir/$host_name"
       printf '{"fileImportExport":true,"imagePreparation":true,"mediaUpload":true,"mediaDownload":true,"host":"%s"}\n' "$host_name" > "$package_dir/file-capabilities.json"
     else
@@ -73,9 +74,11 @@ for target_os in darwin linux windows; do
     done
     find "$package_dir" -type f \( -name '.DS_Store' -o -name '._*' \) -delete
     cp "$repo_dir/INSTALL.md" "$package_dir/README.md"
+    cp "$repo_dir/LICENSE" "$package_dir/LICENSE"
+    cp "$repo_dir/THIRD_PARTY_NOTICES" "$package_dir/THIRD_PARTY_NOTICES"
     cp "$repo_dir/FILES.md" "$package_dir/FILES.md"
     cp "$staging_dir/release-manifest.json" "$package_dir/release-manifest.json"
-    COPYFILE_DISABLE=1 tar -czf "$staging_dir/$name.tar.gz" -C "$staging_dir" "$name"
+    COPYFILE_DISABLE=1 tar --format=ustar -czf "$staging_dir/$name.tar.gz" -C "$staging_dir" "$name"
     checksum=$(shasum -a 256 "$staging_dir/$name.tar.gz")
     printf '%s  %s.tar.gz\n' "${checksum%% *}" "$name" >> "$staging_dir/SHA256SUMS"
     echo "Built $name"

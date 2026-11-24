@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"starry-cli/pkg/community"
+	"github.com/allenvissong-source/starry-cli/pkg/community"
 )
 
 // Only the backend's disposable Gin fixture enables this test. The browser

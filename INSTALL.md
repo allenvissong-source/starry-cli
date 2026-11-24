@@ -1,25 +1,43 @@
 # Starry CLI 与 Skill 安装
 
-选择与你的系统和 CPU 匹配的发行包：macOS 使用 darwin，Linux 使用 linux，
+从 https://github.com/allenvissong-source/starry-cli/releases 下载与你的系统和 CPU
+匹配的发行包：macOS 使用 darwin，Linux 使用 linux，
 Windows 使用 windows；Intel/AMD 64 位使用 amd64，Apple Silicon 与 ARM64
 机器使用 arm64。
 
 macOS/Linux 执行 `tar -xzf <发行包>`；Windows 执行 `tar -xf <发行包>`。
 在解压后的目录中：
 
-1. 将 `starry-cli`（Windows 为 `starry-cli.exe`）放到 PATH 中的可执行目录；包内若有 `starry-format-host`，与 CLI、`file-capabilities.json` 一起放在同一目录。
+1. 将解压后的完整目录放在本机用户的程序目录，并将该目录加入 PATH。
+   CLI（Windows 为 `starry-cli.exe`）、可选 `starry-format-host`、`file-capabilities.json`
+   和许可证保持在一起。
+2. 按需要把 `starry-community`、`starry-character`、`starry-worldbook`、`starry-assets`
+   整个文件夹复制到助手客户端的 skills 目录，保留各自的 references；
+   四者可独立安装并共用 CLI 和凭证。独立 Skills ZIP 提供相同目录内容。
+3. 运行 `starry-cli --version` 核对包内 release-manifest.json，再运行 `--help` 确认 CLI 可用。
 
-Starry 随包环境通过 `STARRY_CLI_BIN` 提供经过平台、架构和内容摘要验证的
-可执行文件绝对路径，并通过 `STARRY_CLI_CONFIG` 指向实例私有配置。此时将下文
+助手插件可通过 `STARRY_CLI_BIN` 提供经过平台、架构和内容摘要验证的
+可执行文件绝对路径。此时将下文
 `starry-cli` 替换为该入口（POSIX shell 为 `"$STARRY_CLI_BIN"`，PowerShell
 为 `& $env:STARRY_CLI_BIN`），无需 Go SDK 或把程序加入 PATH。格式宿主与能力文件
 随组件安装；技能声明本身不授予账号、发布或后台监听权限。
-2. 按需要把 `starry-community`、`starry-character`、`starry-worldbook`、`starry-assets` 整个文件夹复制到助手客户端的 skills 目录，保留各自的 references；四者可独立安装并共用 CLI 和凭证。独立 Skills ZIP 提供相同目录内容。
-3. 运行 `starry-cli --version` 核对包内 release-manifest.json，再运行 `--help` 确认 CLI 可用。
 
 包中无需其他源码或 Go。CLI 直接连接后端，Skill 不需要配置 MCP 服务。
-文件转换和图片规范化上传仅在附带格式宿主的目标包启用；macOS ARM64 已验证，其他目标等待
-原生宿主验证。详情见包内 `FILES.md`。
+文件转换和图片规范化上传仅在附带格式宿主且能力清单声明支持的目标包启用。
+详情见包内 `FILES.md`。
+
+## 升级与卸载
+
+升级前停止正在执行的 CLI 和 watch，下载新 Release 并校验 SHA256SUMS。
+把新包完整解压到另一个目录，运行新目录中的 CLI `--version` 和 `--help`，
+再将 PATH 或助手的 `STARRY_CLI_BIN` 指向新目录。保留旧目录可切回旧版本；
+不要混用两个 Release 的 CLI、格式宿主和能力文件。
+
+用户配置目录与程序目录独立。升级和删除程序目录都不删除 `config.json`、
+登录凭证、watch 状态、导入进度或用户资源；不要把这些数据存进发行包目录。
+卸载手工安装的 CLI 时，删除该程序目录并撤掉对应 PATH 配置；
+助手插件管理的共享 CLI 不随插件卸载而删除。
+明确需要撤销账号连接时先运行 `starry-cli logout`，配置及任务数据的清理另行处理。
 
 ## 连接配置
 
@@ -47,11 +65,11 @@ CLI 自动加锁续期和回写；不要复制 OAuth 配置并发使用。
 自有部署需指定网页地址才生成内容链接。后端地址应为 HTTPS origin；
 本机开发允许回环 HTTP。
 
-图片直传默认媒体 origin 为 `https://upload.dustarry.com`，依据正式切流配置。
+图片直传默认媒体 origin 为 `https://upload.dustarry.com`。
 `r2.dustarry.com` 是网页静态资源镜像，不用于媒体直传。
 自有部署如更换媒体域名，用 `STARRY_CAS_DIRECT_UPLOAD_ORIGIN` 或配置字段
 casDirectUploadOrigin 指定可信 HTTPS origin。CLI 校验 prepare 返回地址必须与它完全匹配，
-只向 `/uploads/<ticket>` 发送无凭证 PUT；不回退到旧 API 字节上传。
+只向 `/uploads/<ticket>` 发送无凭证 PUT。
 
 也可以用 `STARRY_CLI_CONFIG` 指向一个 JSON 配置文件：
 

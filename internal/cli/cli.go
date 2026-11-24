@@ -13,10 +13,10 @@ import (
 	"strings"
 	"time"
 
-	"starry-cli/pkg/assets"
-	"starry-cli/pkg/catalog"
-	"starry-cli/pkg/community"
-	"starry-cli/pkg/transport"
+	"github.com/allenvissong-source/starry-cli/pkg/assets"
+	"github.com/allenvissong-source/starry-cli/pkg/catalog"
+	"github.com/allenvissong-source/starry-cli/pkg/community"
+	"github.com/allenvissong-source/starry-cli/pkg/transport"
 )
 
 var commands = map[string]string{

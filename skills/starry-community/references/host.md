@@ -37,8 +37,7 @@ Windows 需将目录放在本用户专属、受系统 ACL 保护的位置；CLI 
     "id": "task_实际ID",
     "notificationIds": ["9007199254740993"],
     "state": "running",
-    "reason": "",
-    "updatedAt": "2026-11-03T09:00:00Z"
+    "reason": ""
   },
   "items": [],
   "principal": {"ownerUserId": "1000", "integrationId": "连接", "credentialId": "凭证标识", "scopes": ["community.read"], "grantVersion": 1},
