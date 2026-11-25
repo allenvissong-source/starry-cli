@@ -612,11 +612,13 @@ func importFile(ctx context.Context, client *transport.Client, token, binding, k
 			}
 			continue
 		}
-		progress.Media[hash] = "outcome_unknown"
-		if err := saveProgress(in.Progress, progress); err != nil {
-			return nil, err
-		}
-		result, err := assets.UploadFile(ctx, client, token, text(m["file"]), stableID(progress.Key+progress.Digest+hash))
+		result, err := assets.UploadFileWithRegistration(ctx, client, token, text(m["file"]), stableID(progress.Key+progress.Digest+hash), func(digest string) error {
+			if digest != hash {
+				return errors.New("staged media no longer matches import digest")
+			}
+			progress.Media[hash] = "outcome_unknown"
+			return saveProgress(in.Progress, progress)
+		})
 		if err != nil {
 			return nil, err
 		}

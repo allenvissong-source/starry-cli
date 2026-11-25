@@ -40,6 +40,10 @@ func validMedia(in MediaInput) bool {
 }
 
 func Media(ctx context.Context, client *transport.Client, token, name string, raw json.RawMessage) (map[string]any, error) {
+	return media(ctx, client, token, name, raw, nil)
+}
+
+func media(ctx context.Context, client *transport.Client, token, name string, raw json.RawMessage, beforeRegistration func(string) error) (map[string]any, error) {
 	var in MediaInput
 	if transport.DecodeInput(raw, &in) != nil || !validMedia(in) {
 		return nil, errors.New("invalid media handle")
@@ -101,6 +105,14 @@ func Media(ctx context.Context, client *transport.Client, token, name string, ra
 			}
 			if json.Unmarshal(completed.Data, &blob) != nil || blob.SHA256 != in.SHA256 || blob.Size != in.ByteSize {
 				return nil, errors.New("completed upload does not match media")
+			}
+		}
+		if beforeRegistration != nil {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			if err := beforeRegistration(in.SHA256); err != nil {
+				return nil, err
 			}
 		}
 		result, err := transport.WriteResult(client.Do(ctx, "POST", "/api/v1/authoring/cas/assets", token, in.RequestKey,
@@ -236,6 +248,12 @@ func Download(ctx context.Context, client *transport.Client, token string, in Do
 // UploadFile hashes and type-checks the same open regular file twice; modifying
 // it between inspection and upload is detected by both client and server.
 func UploadFile(ctx context.Context, client *transport.Client, token, path, key string) (map[string]any, error) {
+	return UploadFileWithRegistration(ctx, client, token, path, key, nil)
+}
+
+// UploadFileWithRegistration calls beforeRegistration with the file digest
+// immediately before registering the asset. A hook error prevents registration.
+func UploadFileWithRegistration(ctx context.Context, client *transport.Client, token, path, key string, beforeRegistration func(string) error) (map[string]any, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, errors.New("cannot open media file")
@@ -282,7 +300,7 @@ func UploadFile(ctx context.Context, client *transport.Client, token, path, key 
 		in.Receipt = uploaded.Receipt
 		raw, _ = json.Marshal(in)
 	}
-	return Media(ctx, client, token, "assets_finalize_upload", raw)
+	return media(ctx, client, token, "assets_finalize_upload", raw, beforeRegistration)
 }
 
 // DownloadURL consumes only a URL resolved by a permission-checked resource

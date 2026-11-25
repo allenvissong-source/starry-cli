@@ -3,12 +3,15 @@ package cli
 import (
 	"archive/zip"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/allenvissong-source/starry-cli/pkg/transport"
@@ -115,6 +118,105 @@ func TestImportResumeQueriesOriginalCommittedIntentAndNeverRetriesUnknown(t *tes
 	}
 	if _, err := importFile(ctx, client, "token", "other-connection", "character", in); err == nil {
 		t.Fatal("cross-connection progress reused")
+	}
+}
+
+func TestImportMediaResumeOnlyQueriesAfterRegistrationStarted(t *testing.T) {
+	const assetID = "12345678-1234-4234-8234-123456789abc"
+	const digest = "source-digest"
+	const key = "file-intent"
+	png := []byte("\x89PNG\r\n\x1a\nfixture")
+	hash := fmt.Sprintf("%x", sha256.Sum256(png))
+	registrationKey := stableID(key + digest + hash)
+	var attempts, uploads, completions, writes, queries atomic.Int32
+	edge := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		uploads.Add(1)
+		fmt.Fprintf(w, `{"success":true,"data":{"sha256":%q,"byte_size":%d,"receipt":"receipt"}}`, hash, len(png))
+	}))
+	defer edge.Close()
+	dir := t.TempDir()
+	in := fileInput{File: "source.json", Progress: filepath.Join(dir, "progress.json"), RequestKey: key}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		respondError := func(status int, code string) {
+			w.WriteHeader(status)
+			fmt.Fprintf(w, `{"success":false,"error":{"code":%q}}`, code)
+		}
+		const assetsPath = "/api/v1/authoring/cas/assets"
+		switch {
+		case r.URL.Path == assetsPath && r.Method == "GET":
+			if r.URL.Query().Get("requestKey") != registrationKey || r.URL.Query().Get("sha256") != hash {
+				t.Error("changed media recovery selector")
+			}
+			if queries.Add(1) == 1 {
+				respondError(404, "not_found")
+			} else {
+				fmt.Fprintf(w, `{"success":true,"data":{"asset_id":%q,"sha256":%q}}`, assetID, hash)
+			}
+		case r.URL.Path == assetsPath && r.Method == "POST":
+			writes.Add(1)
+			var body map[string]any
+			if json.NewDecoder(r.Body).Decode(&body) != nil || body["client_mutation_id"] != registrationKey || body["sha256"] != hash {
+				t.Error("changed media registration intent")
+			}
+			var progress importProgress
+			contents, err := os.ReadFile(in.Progress)
+			if err != nil || json.Unmarshal(contents, &progress) != nil || progress.Media[hash] != "outcome_unknown" {
+				t.Error("registration request was not preceded by a durable marker")
+			}
+			respondError(503, "upstream_unavailable")
+		case strings.HasSuffix(r.URL.Path, "/prepare"):
+			if attempts.Add(1) == 1 {
+				respondError(503, "upstream_unavailable")
+				return
+			}
+			fmt.Fprintf(w, `{"success":true,"data":{"upload_url":%q,"method":"PUT","ticket":"ticket"}}`, edge.URL+"/uploads/ticket")
+		case strings.HasSuffix(r.URL.Path, "/complete"):
+			if completions.Add(1) == 1 {
+				respondError(503, "upstream_unavailable")
+				return
+			}
+			fmt.Fprintf(w, `{"success":true,"data":{"sha256":%q,"byte_size":%d}}`, hash, len(png))
+		default:
+			respondError(404, "cas.blob_not_found")
+		}
+	}))
+	defer server.Close()
+	client, err := transport.NewClient(transport.Config{BackendURL: server.URL, CASDirectUploadOrigin: edge.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	file := filepath.Join(dir, "avatar.png")
+	if err := os.WriteFile(file, png, 0600); err != nil {
+		t.Fatal(err)
+	}
+	p := importProgress{Version: 1, Binding: "connection", Type: "character", Key: key, Digest: digest,
+		Media: map[string]string{}, Graph: fileGraph{Media: []map[string]any{{"file": file, "sha256": hash}}}}
+	if err := saveProgress(in.Progress, p); err != nil {
+		t.Fatal(err)
+	}
+	resume := func() error {
+		_, err := importFile(context.Background(), client, "token", p.Binding, p.Type, in)
+		return err
+	}
+	for range 2 {
+		if err := resume(); err == nil {
+			t.Fatal("expected a pre-registration failure")
+		}
+		if writes.Load() != 0 || queries.Load() != 0 {
+			t.Fatal("pre-registration failure started registration or recovery")
+		}
+	}
+	if err := resume(); err == nil || !strings.Contains(err.Error(), "outcome_unknown") {
+		t.Fatal("expected uncertain registration:", err)
+	}
+	if err := resume(); err == nil || !strings.Contains(err.Error(), "registration not confirmed") {
+		t.Fatal("expected query-only recovery:", err)
+	}
+	if err := resume(); err != nil {
+		t.Fatal(err)
+	}
+	if attempts.Load() != 3 || uploads.Load() != 2 || completions.Load() != 2 || writes.Load() != 1 || queries.Load() != 2 {
+		t.Fatal("unexpected calls:", attempts.Load(), uploads.Load(), completions.Load(), writes.Load(), queries.Load())
 	}
 }
 

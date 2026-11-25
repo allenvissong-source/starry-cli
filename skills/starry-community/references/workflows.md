@@ -75,7 +75,8 @@ starry-cli collection import --input collection-import.json
 `<progress>.files` 目录，保留外部数字 ID、UID 映射和完整原始文件。
 第三方角色扩展不会成为可信身份、审核或 Catalog 字段。
 
-中断后重新执行同一输入，先查询已尝试的原操作；无法确认时停止，找不到
+中断后重新执行同一输入。媒体资产尚未开始登记时，可继续探测、上传或确认回执；
+已开始登记的媒体和已尝试的草稿写入，先查询原操作，无法确认时停止。找不到
 结果不代表未提交。不自动改 key、重放结果未知的写入、清空进度或重复建卡。
 媒体注册可用 `media operation`；草稿与发布用 `asset operation`。
 若进程被强制终止遗留 `<progress>.lock` 目录，先确认旧进程已退出再移除
