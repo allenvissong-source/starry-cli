@@ -43,7 +43,7 @@ SDK 位于 `pkg/`，通过 HTTP 调用后端；CLI 不依赖 MCP 或其他工作
 外部 Go 项目通过公开模块地址引用 SDK：
 
 ```sh
-go get github.com/allenvissong-source/starry-cli@v1.0.0
+go get github.com/allenvissong-source/starry-cli@v1.0.1
 ```
 
 导入路径为 `github.com/allenvissong-source/starry-cli/pkg/community`。
